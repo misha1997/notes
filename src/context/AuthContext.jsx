@@ -3,8 +3,6 @@ import { authService } from '../api'; // тот сервис, что мы обс
 
 const AuthContext = createContext(null);
 
-const API_URL = process.env.REACT_APP_API_URL;
-
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -29,7 +27,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const register = async (username, email, password) => {
-        const res = await fetch(`${API_URL}/auth/register`, {
+        const res = await fetch(`/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password })
