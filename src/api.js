@@ -1,5 +1,3 @@
-const API_URL = import.meta.env.VITE_API_URL;
-
 const getHeaders = () => ({
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -8,12 +6,12 @@ const getHeaders = () => ({
 export const noteService = {
     // Получить все заметки
     async getAll() {
-        const res = await fetch(`${API_URL}/notes`, { headers: getHeaders() });
+        const res = await fetch(`/api/notes`, { headers: getHeaders() });
         return res.ok ? res.json() : [];
     },
     // Создать заметку
     async create(noteData) {
-        const res = await fetch(`${API_URL}/notes`, {
+        const res = await fetch(`/api/notes`, {
             method: 'POST',
             headers: getHeaders(),
             body: JSON.stringify(noteData)
@@ -21,7 +19,7 @@ export const noteService = {
         return res.json();
     },
     async reorder(noteIds) {
-        await fetch(`${API_URL}/notes/reorder`, {
+        await fetch(`/api/notes/reorder`, {
             method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify({ noteIds })
@@ -29,7 +27,7 @@ export const noteService = {
     },
     // Обновить заметку
     async update(id, noteData) {
-        const res = await fetch(`${API_URL}/notes/${id}`, {
+        const res = await fetch(`/api/notes/${id}`, {
             method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify(noteData)
@@ -38,7 +36,7 @@ export const noteService = {
     },
     // Удалить заметку
     async delete(id) {
-        await fetch(`${API_URL}/notes/${id}`, {
+        await fetch(`/api/notes/${id}`, {
             method: 'DELETE',
             headers: getHeaders()
         });
@@ -47,7 +45,7 @@ export const noteService = {
 
 export const authService = {
     async login(login, password) {
-        const res = await fetch(`${API_URL}/auth/login`, {
+        const res = await fetch(`/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ login, password })
