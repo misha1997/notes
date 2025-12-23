@@ -3,6 +3,10 @@ const getHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('token')}`
 });
 
+const getAuthHeader = () => ({
+    'Authorization': `Bearer ${localStorage.getItem('token')}`
+});
+
 export const noteService = {
     // Получить все заметки
     async getAll() {
@@ -33,6 +37,23 @@ export const noteService = {
             body: JSON.stringify(noteData)
         });
         return res.json();
+    },
+    async uploadAttachment(id, file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`/api/notes/${id}/attachments`, {
+            method: 'POST',
+            headers: getAuthHeader(),
+            body: formData
+        });
+        if (!res.ok) throw new Error('Upload failed');
+        return res.json();
+    },
+    async deleteAttachment(noteId, attachmentId) {
+        await fetch(`/api/notes/${noteId}/attachments/${attachmentId}`, {
+            method: 'DELETE',
+            headers: getAuthHeader()
+        });
     },
     // Удалить заметку
     async delete(id) {

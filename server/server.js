@@ -3,6 +3,9 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
@@ -12,6 +15,23 @@ const SALT_ROUNDS = 10;
 
 app.use(cors());
 app.use(express.json()); // Встроенный аналог bodyParser
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Настройка хранения файлов
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
+
+const storage = multer.diskStorage({
+    destination: (_, __, cb) => cb(null, uploadsDir),
+    filename: (_, file, cb) => {
+        const safeName = file.originalname.replace(/\s+/g, '_');
+        cb(null, `${Date.now()}_${safeName}`);
+    }
+});
+
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } }); // 10 MB limit
 
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
@@ -52,6 +72,19 @@ async function initDatabase() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         note_id INT NOT NULL,
         tag VARCHAR(100) NOT NULL,
+        FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+        await connection.query(`
+      CREATE TABLE IF NOT EXISTS attachments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        note_id INT NOT NULL,
+        filename VARCHAR(255) NOT NULL,
+        original_name VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        size INT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -118,7 +151,37 @@ app.get('/api/notes', authenticateToken, async (req, res) => {
       GROUP BY n.id 
       ORDER BY n.position ASC, n.timestamp DESC`, [req.user.id]);
 
-        const notes = rows.map(n => ({ ...n, hashtags: n.hashtags ? n.hashtags.split(',') : [] }));
+        const noteIds = rows.map(n => n.id);
+        let attachmentsMap = {};
+
+        if (noteIds.length) {
+            const [attachmentRows] = await pool.query(`
+        SELECT a.* FROM attachments a
+        JOIN notes n ON a.note_id = n.id
+        WHERE n.user_id = ? AND a.note_id IN (?)
+      `, [req.user.id, noteIds]);
+
+            attachmentsMap = attachmentRows.reduce((acc, att) => {
+                const dto = {
+                    id: att.id,
+                    noteId: att.note_id,
+                    filename: att.filename,
+                    originalName: att.original_name,
+                    mimeType: att.mime_type,
+                    size: att.size,
+                    url: `${req.protocol}://${req.get('host')}/uploads/${att.filename}`
+                };
+                if (!acc[att.note_id]) acc[att.note_id] = [];
+                acc[att.note_id].push(dto);
+                return acc;
+            }, {});
+        }
+
+        const notes = rows.map(n => ({
+            ...n,
+            hashtags: n.hashtags ? n.hashtags.split(',') : [],
+            attachments: attachmentsMap[n.id] || []
+        }));
         res.json(notes);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -138,7 +201,7 @@ app.post('/api/notes', authenticateToken, async (req, res) => {
             await conn.query('INSERT INTO hashtags (note_id, tag) VALUES ?', [values]);
         }
         await conn.commit();
-        res.status(201).json({ id: noteId, content, type, hashtags });
+        res.status(201).json({ id: noteId, content, type, hashtags, attachments: [] });
     } catch (err) {
         await conn.rollback();
         res.status(500).json({ error: err.message });
@@ -191,7 +254,69 @@ app.put('/api/notes/:id', authenticateToken, async (req, res) => {
     }
 });
 
+app.post('/api/notes/:id/attachments', authenticateToken, upload.single('file'), async (req, res) => {
+    const noteId = req.params.id;
+    if (!req.file) {
+        return res.status(400).json({ error: 'Файл не найден' });
+    }
+
+    const [notes] = await pool.query('SELECT id FROM notes WHERE id = ? AND user_id = ?', [noteId, req.user.id]);
+    if (!notes.length) {
+        fs.unlink(path.join(uploadsDir, req.file.filename), () => {});
+        return res.status(404).json({ error: 'Заметка не найдена' });
+    }
+
+    const { filename, originalname, mimetype, size } = req.file;
+    const [result] = await pool.query(
+        'INSERT INTO attachments (note_id, filename, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)',
+        [noteId, filename, originalname, mimetype, size]
+    );
+
+    const attachment = {
+        id: result.insertId,
+        noteId: Number(noteId),
+        filename,
+        originalName: originalname,
+        mimeType: mimetype,
+        size,
+        url: `${req.protocol}://${req.get('host')}/uploads/${filename}`
+    };
+
+    res.status(201).json(attachment);
+});
+
+app.delete('/api/notes/:noteId/attachments/:attachmentId', authenticateToken, async (req, res) => {
+    const { noteId, attachmentId } = req.params;
+    const [rows] = await pool.query(`
+    SELECT a.* FROM attachments a
+    JOIN notes n ON a.note_id = n.id
+    WHERE a.id = ? AND a.note_id = ? AND n.user_id = ?
+  `, [attachmentId, noteId, req.user.id]);
+
+    const attachment = rows[0];
+    if (!attachment) {
+        return res.status(404).json({ error: 'Файл не найден' });
+    }
+
+    const filePath = path.join(uploadsDir, attachment.filename);
+    fs.promises.unlink(filePath).catch(() => {});
+
+    await pool.query('DELETE FROM attachments WHERE id = ?', [attachmentId]);
+    res.json({ message: 'Вложение удалено' });
+});
+
 app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
+    const [attachments] = await pool.query(`
+    SELECT a.filename FROM attachments a
+    JOIN notes n ON a.note_id = n.id
+    WHERE n.id = ? AND n.user_id = ?
+  `, [req.params.id, req.user.id]);
+
+    attachments.forEach(att => {
+        const filePath = path.join(uploadsDir, att.filename);
+        fs.promises.unlink(filePath).catch(() => {});
+    });
+
     await pool.query('DELETE FROM notes WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
     res.json({ message: 'Удалено' });
 });
