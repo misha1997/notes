@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // Путь к вашему контексту
 import { LogIn, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import TelegramLogin from './TelegramLogin';
 
 export default function Login() {
     const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -108,16 +109,19 @@ export default function Login() {
                     </form>
 
                     {/* Ссылка на регистрацию */}
-                    <div className="mt-8 text-center border-t border-white/10 pt-6">
-                        <p className="text-gray-400">
-                            Впервые здесь?{' '}
-                            <Link
-                                to="/register"
-                                className="text-purple-400 hover:text-purple-300 font-semibold transition-colors underline-offset-4 hover:underline"
-                            >
-                                Создать аккаунт
-                            </Link>
-                        </p>
+                    <div className="mt-8 space-y-6 border-t border-white/10 pt-6">
+                        <TelegramLogin />
+                        <div className="text-center">
+                            <p className="text-gray-400">
+                                Впервые здесь?{' '}
+                                <Link
+                                    to="/register"
+                                    className="text-purple-400 hover:text-purple-300 font-semibold transition-colors underline-offset-4 hover:underline"
+                                >
+                                    Создать аккаунт
+                                </Link>
+                            </p>
+                        </div>
                     </div>
                 </div>
 

@@ -6,12 +6,14 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
 const SALT_ROUNDS = 10;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 app.use(cors());
 app.use(express.json()); // Встроенный аналог bodyParser
@@ -55,6 +57,16 @@ async function initDatabase() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+        // Дополнительные поля для Telegram (MySQL < 8: нет IF NOT EXISTS для ADD COLUMN)
+        const [tgIdCol] = await connection.query(`SHOW COLUMNS FROM users LIKE 'telegram_id'`);
+        if (tgIdCol.length === 0) {
+            await connection.query(`ALTER TABLE users ADD COLUMN telegram_id BIGINT UNIQUE NULL`);
+        }
+        const [tgUserCol] = await connection.query(`SHOW COLUMNS FROM users LIKE 'telegram_username'`);
+        if (tgUserCol.length === 0) {
+            await connection.query(`ALTER TABLE users ADD COLUMN telegram_username VARCHAR(50) NULL`);
+        }
 
         await connection.query(`
       CREATE TABLE IF NOT EXISTS notes (
@@ -109,6 +121,19 @@ function authenticateToken(req, res, next) {
     });
 }
 
+function verifyTelegramData(data) {
+    if (!TELEGRAM_BOT_TOKEN) return null;
+    const { hash, ...rest } = data;
+    const secretKey = crypto.createHash('sha256').update(TELEGRAM_BOT_TOKEN).digest();
+    const dataCheckString = Object.keys(rest)
+        .sort()
+        .map(key => `${key}=${rest[key]}`)
+        .join('\n');
+    const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    if (hmac === hash) return rest;
+    return null;
+}
+
 // --- AUTH ---
 
 app.post('/api/auth/register', async (req, res) => {
@@ -136,6 +161,69 @@ app.post('/api/auth/login', async (req, res) => {
         res.json({ token, user: { id: user.id, username: user.username, email: user.email } });
     } else {
         res.status(401).json({ error: 'Неверные данные' });
+    }
+});
+
+app.post('/api/auth/telegram', async (req, res) => {
+    try {
+        if (!TELEGRAM_BOT_TOKEN) {
+            return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN не задан' });
+        }
+
+        const telegramData = req.body.telegramData;
+        if (!telegramData) return res.status(400).json({ error: 'Нет данных Telegram' });
+
+        const verified = verifyTelegramData(telegramData);
+        if (!verified) return res.status(403).json({ error: 'Подпись Telegram невалидна' });
+
+        const tgId = verified.id;
+        const tgUsername = verified.username || `tg_${tgId}`;
+        const tgEmail = `${tgId}@telegram.local`;
+        const randomPass = crypto.randomBytes(16).toString('hex');
+        const randomHash = await bcrypt.hash(randomPass, SALT_ROUNDS);
+
+        const conn = await pool.getConnection();
+        try {
+            await conn.beginTransaction();
+
+            const [existing] = await conn.query('SELECT * FROM users WHERE telegram_id = ?', [tgId]);
+            let userRow = existing[0];
+
+            if (!userRow) {
+                // Пытаемся занять уникальный username
+                let finalUsername = tgUsername;
+                let suffix = 1;
+                while (true) {
+                    const [check] = await conn.query('SELECT id FROM users WHERE username = ?', [finalUsername]);
+                    if (check.length === 0) break;
+                    finalUsername = `${tgUsername}_${suffix}`;
+                    suffix += 1;
+                }
+
+                const [result] = await conn.query(
+                    'INSERT INTO users (username, email, password_hash, telegram_id, telegram_username) VALUES (?, ?, ?, ?, ?)',
+                    [finalUsername, tgEmail, randomHash, tgId, tgUsername]
+                );
+
+                userRow = {
+                    id: result.insertId,
+                    username: finalUsername,
+                    email: tgEmail
+                };
+            }
+
+            await conn.commit();
+
+            const token = jwt.sign({ id: userRow.id, username: userRow.username }, JWT_SECRET, { expiresIn: '7d' });
+            res.json({ token, user: { id: userRow.id, username: userRow.username, email: userRow.email } });
+        } catch (err) {
+            await conn.rollback();
+            res.status(500).json({ error: err.message });
+        } finally {
+            conn.release();
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

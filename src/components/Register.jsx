@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // Путь к вашему контексту
 import { UserPlus, User, Mail, Lock, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
+import TelegramLogin from './TelegramLogin';
 
 export default function Register() {
     const [formData, setFormData] = useState({
@@ -168,16 +169,19 @@ export default function Register() {
                         </button>
                     </form>
 
-                    <div className="mt-8 text-center border-t border-white/10 pt-6">
-                        <p className="text-gray-400">
-                            Уже есть аккаунт?{' '}
-                            <Link
-                                to="/login"
-                                className="text-purple-400 hover:text-purple-300 font-semibold transition-colors"
-                            >
-                                Войти
-                            </Link>
-                        </p>
+                    <div className="mt-8 space-y-6 border-t border-white/10 pt-6">
+                        <TelegramLogin />
+                        <div className="text-center">
+                            <p className="text-gray-400">
+                                Уже есть аккаунт?{' '}
+                                <Link
+                                    to="/login"
+                                    className="text-purple-400 hover:text-purple-300 font-semibold transition-colors"
+                                >
+                                    Войти
+                                </Link>
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

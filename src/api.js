@@ -75,6 +75,16 @@ export const authService = {
         if (data.token) localStorage.setItem('token', data.token);
         return data;
     },
+    async telegramLogin(telegramData) {
+        const res = await fetch(`/api/auth/telegram`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ telegramData })
+        });
+        const data = await res.json();
+        if (data.token) localStorage.setItem('token', data.token);
+        return data;
+    },
     logout() {
         localStorage.removeItem('token');
     }

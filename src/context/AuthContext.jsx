@@ -26,6 +26,15 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: data.error };
     };
 
+    const loginWithTelegram = async (telegramData) => {
+        const data = await authService.telegramLogin(telegramData);
+        if (data.token) {
+            setUser(data.user);
+            return { success: true };
+        }
+        return { success: false, error: data.error };
+    };
+
     const register = async (username, email, password) => {
         const res = await fetch(`/api/auth/register`, {
             method: 'POST',
@@ -47,7 +56,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+        <AuthContext.Provider value={{ user, login, register, logout, loading, loginWithTelegram }}>
             {children}
         </AuthContext.Provider>
     );
