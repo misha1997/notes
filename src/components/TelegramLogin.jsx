@@ -12,42 +12,29 @@ export default function TelegramLogin() {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (!botName) return;
-
-        window.handleTelegramAuth = async (user) => {
-            setError('');
+        // Обрабатываем возврат с параметрами Telegram OAuth (бот)
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('tg_redirect') === '1' && params.get('hash')) {
+            const data = {};
+            params.forEach((value, key) => {
+                data[key] = value;
+            });
             setLoading(true);
-            try {
-                const res = await loginWithTelegram(user);
+            setError('');
+            (async () => {
+                const res = await loginWithTelegram(data);
                 if (res.success) {
                     navigate('/dashboard');
                 } else {
                     setError(res.error || 'Не удалось войти через Telegram');
                 }
-            } finally {
                 setLoading(false);
-            }
-        };
-
-        const container = document.getElementById('tg-login-container');
-        if (!container) return;
-
-        // Очищаем на всякий случай
-        container.innerHTML = '';
-        const script = document.createElement('script');
-        script.src = 'https://telegram.org/js/telegram-widget.js?22';
-        script.setAttribute('data-telegram-login', botName);
-        script.setAttribute('data-size', 'large');
-        script.setAttribute('data-userpic', 'false');
-        script.setAttribute('data-request-access', 'write');
-        script.setAttribute('data-onauth', 'handleTelegramAuth');
-        script.async = true;
-        container.appendChild(script);
-
-        return () => {
-            if (container) container.innerHTML = '';
-        };
-    }, []);
+                // Чистим query-параметры, чтобы не повторять логин при обновлении
+                const cleanUrl = window.location.origin + window.location.pathname;
+                window.history.replaceState(null, '', cleanUrl);
+            })();
+        }
+    }, [loginWithTelegram, navigate]);
 
     return (
         <div className="space-y-3">
@@ -61,10 +48,17 @@ export default function TelegramLogin() {
                     Укажите REACT_APP_TELEGRAM_BOT_NAME в .env и перезапустите dev‑сервер.
                 </div>
             ) : (
-                <div className="rounded-2xl border border-purple-500/40 bg-purple-500/10 px-4 py-3 shadow-lg shadow-purple-900/30">
-                    <p className="text-center text-sm text-purple-100 mb-2 font-semibold">Войти через Telegram</p>
-                    <div className="flex flex-col items-center gap-2">
-                        <div id="tg-login-container" />
+                <div className="rounded-2xl border border-purple-500/40 bg-purple-500/10 px-4 py-4 shadow-lg shadow-purple-900/30 space-y-3">
+                    <p className="text-center text-sm text-purple-100 font-semibold">Войти через Telegram</p>
+                    <div className="flex flex-col items-center gap-3">
+                        <a
+                            href={`https://oauth.telegram.org/auth?bot=${botName}&origin=${encodeURIComponent(window.location.origin)}&return_to=${encodeURIComponent(`${window.location.origin}${window.location.pathname}?tg_redirect=1`)}&embed=0&request_access=write`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center justify-center px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-sm text-white font-semibold transition-colors"
+                        >
+                            Открыть Telegram
+                        </a>
                         {loading && (
                             <div className="flex items-center gap-2 text-sm text-purple-100">
                                 <Loader2 className="animate-spin" size={16} />
