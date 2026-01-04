@@ -75,6 +75,7 @@ async function initDatabase() {
         content TEXT NOT NULL,
         type ENUM('text', 'code') DEFAULT 'text',
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -97,9 +98,19 @@ async function initDatabase() {
         mime_type VARCHAR(100) NOT NULL,
         size INT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        deleted_at DATETIME NULL,
         FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+        const [noteDeletedCol] = await connection.query(`SHOW COLUMNS FROM notes LIKE 'deleted_at'`);
+        if (noteDeletedCol.length === 0) {
+            await connection.query(`ALTER TABLE notes ADD COLUMN deleted_at DATETIME NULL`);
+        }
+        const [attachmentDeletedCol] = await connection.query(`SHOW COLUMNS FROM attachments LIKE 'deleted_at'`);
+        if (attachmentDeletedCol.length === 0) {
+            await connection.query(`ALTER TABLE attachments ADD COLUMN deleted_at DATETIME NULL`);
+        }
 
         connection.release();
         console.log('✅ База данных готова');
@@ -235,7 +246,7 @@ app.get('/api/notes', authenticateToken, async (req, res) => {
       SELECT n.*, GROUP_CONCAT(h.tag) as hashtags 
       FROM notes n 
       LEFT JOIN hashtags h ON n.id = h.note_id 
-      WHERE n.user_id = ? 
+      WHERE n.user_id = ? AND n.deleted_at IS NULL
       GROUP BY n.id 
       ORDER BY n.position ASC, n.timestamp DESC`, [req.user.id]);
 
@@ -246,7 +257,7 @@ app.get('/api/notes', authenticateToken, async (req, res) => {
             const [attachmentRows] = await pool.query(`
         SELECT a.* FROM attachments a
         JOIN notes n ON a.note_id = n.id
-        WHERE n.user_id = ? AND a.note_id IN (?)
+        WHERE n.user_id = ? AND a.note_id IN (?) AND a.deleted_at IS NULL AND n.deleted_at IS NULL
       `, [req.user.id, noteIds]);
 
             attachmentsMap = attachmentRows.reduce((acc, att) => {
@@ -306,7 +317,7 @@ app.put('/api/notes/reorder', authenticateToken, async (req, res) => {
 
         // Обновляем позицию для каждой заметки
         const queries = noteIds.map((id, index) =>
-            conn.query('UPDATE notes SET position = ? WHERE id = ? AND user_id = ?', [index, id, req.user.id])
+            conn.query('UPDATE notes SET position = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [index, id, req.user.id])
         );
 
         await Promise.all(queries);
@@ -325,7 +336,7 @@ app.put('/api/notes/:id', authenticateToken, async (req, res) => {
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
-        await conn.query('UPDATE notes SET content = ?, type = ? WHERE id = ? AND user_id = ?', [content, type, req.params.id, req.user.id]);
+        await conn.query('UPDATE notes SET content = ?, type = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [content, type, req.params.id, req.user.id]);
         await conn.query('DELETE FROM hashtags WHERE note_id = ?', [req.params.id]);
 
         if (hashtags?.length) {
@@ -348,7 +359,7 @@ app.post('/api/notes/:id/attachments', authenticateToken, upload.single('file'),
         return res.status(400).json({ error: 'Файл не найден' });
     }
 
-    const [notes] = await pool.query('SELECT id FROM notes WHERE id = ? AND user_id = ?', [noteId, req.user.id]);
+    const [notes] = await pool.query('SELECT id FROM notes WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [noteId, req.user.id]);
     if (!notes.length) {
         fs.unlink(path.join(uploadsDir, req.file.filename), () => {});
         return res.status(404).json({ error: 'Заметка не найдена' });
@@ -378,7 +389,7 @@ app.delete('/api/notes/:noteId/attachments/:attachmentId', authenticateToken, as
     const [rows] = await pool.query(`
     SELECT a.* FROM attachments a
     JOIN notes n ON a.note_id = n.id
-    WHERE a.id = ? AND a.note_id = ? AND n.user_id = ?
+    WHERE a.id = ? AND a.note_id = ? AND n.user_id = ? AND a.deleted_at IS NULL AND n.deleted_at IS NULL
   `, [attachmentId, noteId, req.user.id]);
 
     const attachment = rows[0];
@@ -386,26 +397,13 @@ app.delete('/api/notes/:noteId/attachments/:attachmentId', authenticateToken, as
         return res.status(404).json({ error: 'Файл не найден' });
     }
 
-    const filePath = path.join(uploadsDir, attachment.filename);
-    fs.promises.unlink(filePath).catch(() => {});
-
-    await pool.query('DELETE FROM attachments WHERE id = ?', [attachmentId]);
+    await pool.query('UPDATE attachments SET deleted_at = NOW() WHERE id = ?', [attachmentId]);
     res.json({ message: 'Вложение удалено' });
 });
 
 app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
-    const [attachments] = await pool.query(`
-    SELECT a.filename FROM attachments a
-    JOIN notes n ON a.note_id = n.id
-    WHERE n.id = ? AND n.user_id = ?
-  `, [req.params.id, req.user.id]);
-
-    attachments.forEach(att => {
-        const filePath = path.join(uploadsDir, att.filename);
-        fs.promises.unlink(filePath).catch(() => {});
-    });
-
-    await pool.query('DELETE FROM notes WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    await pool.query('UPDATE notes SET deleted_at = NOW() WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [req.params.id, req.user.id]);
+    await pool.query('UPDATE attachments SET deleted_at = NOW() WHERE note_id = ? AND deleted_at IS NULL', [req.params.id]);
     res.json({ message: 'Удалено' });
 });
 

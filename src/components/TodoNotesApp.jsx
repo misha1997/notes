@@ -5,6 +5,56 @@ import { noteService } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
+const urlRegex = /https?:\/\/[^\s]+/g;
+
+const splitTextWithLinks = (text) => {
+    if (!text) return [{ type: 'text', value: '' }];
+    const parts = [];
+    let lastIndex = 0;
+    for (const match of text.matchAll(urlRegex)) {
+        const start = match.index ?? 0;
+        if (start > lastIndex) {
+            parts.push({ type: 'text', value: text.slice(lastIndex, start) });
+        }
+        let url = match[0];
+        let trailing = '';
+        const trailingMatch = url.match(/[),.!?]+$/);
+        if (trailingMatch) {
+            trailing = trailingMatch[0];
+            url = url.slice(0, -trailing.length);
+        }
+        if (url) {
+            parts.push({ type: 'link', value: url });
+        }
+        if (trailing) {
+            parts.push({ type: 'text', value: trailing });
+        }
+        lastIndex = start + match[0].length;
+    }
+    if (lastIndex < text.length) {
+        parts.push({ type: 'text', value: text.slice(lastIndex) });
+    }
+    return parts.length ? parts : [{ type: 'text', value: text }];
+};
+
+const renderLinkedText = (text) =>
+    splitTextWithLinks(text).map((part, index) => {
+        if (part.type === 'link') {
+            return (
+                <a
+                    key={`link-${index}`}
+                    href={part.value}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-purple-300 underline underline-offset-2 hover:text-purple-200 break-all"
+                >
+                    {part.value}
+                </a>
+            );
+        }
+        return <span key={`text-${index}`}>{part.value}</span>;
+    });
+
 const DraggableNote = forwardRef(function DraggableNote(
     {
         note,
@@ -103,7 +153,7 @@ const DraggableNote = forwardRef(function DraggableNote(
                         onChange={(e) => setEditContent(e.target.value)}
                         onInput={autoSizeEdit}
                         rows={1}
-                        className={`w-full p-4 bg-black/30 border border-white/30 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[100px] overflow-hidden ${editType === 'code' ? 'font-mono text-sm' : ''}`}
+                        className={`w-full p-4 bg-black/30 border border-white/30 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[100px] max-h-[260px] resize-y overflow-y-auto scrollbar-styled ${editType === 'code' ? 'font-mono text-sm' : ''}`}
                     />
 
                     <div className="flex items-center gap-2 flex-wrap">
@@ -214,7 +264,11 @@ const DraggableNote = forwardRef(function DraggableNote(
                             </button>
                         </div>
                     </div>
-                    <pre className={`text-white whitespace-pre-wrap break-words ${note.type === 'code' ? 'font-mono text-sm bg-black/20 p-3 rounded-lg border border-white/5' : ''}`}>{note.content}</pre>
+                    {note.type === 'code' ? (
+                        <pre className="text-white whitespace-pre-wrap break-words font-mono text-sm bg-black/20 p-3 rounded-lg border border-white/5">{note.content}</pre>
+                    ) : (
+                        <div className="text-white whitespace-pre-wrap break-words">{renderLinkedText(note.content)}</div>
+                    )}
                     {note.hashtags?.length > 0 ? (
                         <div className="flex flex-wrap gap-2 mt-4">
                             {note.hashtags?.map(tag => (
@@ -542,7 +596,7 @@ export default function TodoNotesApp() {
                                 onInput={autoSizeInput}
                                 rows={1}
                                 placeholder="Введите текст или поиск... (Ctrl + Enter — добавить)"
-                                className="w-full pl-12 pr-4 py-4 bg-white/20 border border-white/30 rounded-2xl text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all min-h-[48px] resize-none overflow-hidden"
+                                className="w-full pl-12 pr-4 py-4 bg-white/20 border border-white/30 rounded-2xl text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all min-h-[48px] max-h-[240px] resize-y overflow-y-auto scrollbar-styled"
                             />
                         </div>
 
