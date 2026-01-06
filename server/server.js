@@ -16,6 +16,7 @@ const SALT_ROUNDS = 10;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 app.use(cors());
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/download/:filename', (req, res) => {
@@ -271,6 +272,7 @@ app.get('/api/notes', authenticateToken, async (req, res) => {
       `, [req.user.id, noteIds]);
 
             attachmentsMap = attachmentRows.reduce((acc, att) => {
+                const proto = req.headers['x-forwarded-proto'] || req.protocol;
                 const dto = {
                     id: att.id,
                     noteId: att.note_id,
@@ -278,7 +280,7 @@ app.get('/api/notes', authenticateToken, async (req, res) => {
                     originalName: att.original_name,
                     mimeType: att.mime_type,
                     size: att.size,
-                    url: `${req.protocol}://${req.get('host')}/download/${encodeURIComponent(att.filename)}`
+                    url: `${proto}://${req.get('host')}/download/${encodeURIComponent(att.filename)}`
                 };
                 if (!acc[att.note_id]) acc[att.note_id] = [];
                 acc[att.note_id].push(dto);
@@ -382,6 +384,7 @@ app.post('/api/notes/:id/attachments', authenticateToken, upload.single('file'),
         [noteId, filename, decodedOriginalName, mimetype, size]
     );
 
+    const proto = req.headers['x-forwarded-proto'] || req.protocol;
     const attachment = {
         id: result.insertId,
         noteId: Number(noteId),
@@ -389,7 +392,7 @@ app.post('/api/notes/:id/attachments', authenticateToken, upload.single('file'),
         originalName: decodedOriginalName,
         mimeType: mimetype,
         size,
-        url: `${req.protocol}://${req.get('host')}/download/${encodeURIComponent(filename)}`
+        url: `${proto}://${req.get('host')}/download/${encodeURIComponent(filename)}`
     };
 
     res.status(201).json(attachment);
