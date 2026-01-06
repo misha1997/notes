@@ -28,7 +28,8 @@ if (!fs.existsSync(uploadsDir)) {
 const storage = multer.diskStorage({
     destination: (_, __, cb) => cb(null, uploadsDir),
     filename: (_, file, cb) => {
-        const safeName = file.originalname.replace(/\s+/g, '_');
+        const decodedName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+        const safeName = decodedName.replace(/\s+/g, '_');
         cb(null, `${Date.now()}_${safeName}`);
     }
 });
@@ -366,16 +367,17 @@ app.post('/api/notes/:id/attachments', authenticateToken, upload.single('file'),
     }
 
     const { filename, originalname, mimetype, size } = req.file;
+    const decodedOriginalName = Buffer.from(originalname, 'latin1').toString('utf8');
     const [result] = await pool.query(
         'INSERT INTO attachments (note_id, filename, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)',
-        [noteId, filename, originalname, mimetype, size]
+        [noteId, filename, decodedOriginalName, mimetype, size]
     );
 
     const attachment = {
         id: result.insertId,
         noteId: Number(noteId),
         filename,
-        originalName: originalname,
+        originalName: decodedOriginalName,
         mimeType: mimetype,
         size,
         url: `${req.protocol}://${req.get('host')}/uploads/${filename}`
