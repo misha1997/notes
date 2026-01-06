@@ -278,7 +278,7 @@ app.get('/api/notes', authenticateToken, async (req, res) => {
                     originalName: att.original_name,
                     mimeType: att.mime_type,
                     size: att.size,
-                    url: `${req.protocol}://${req.get('host')}/uploads/${att.filename}`
+                    url: `${req.protocol}://${req.get('host')}/download/${encodeURIComponent(att.filename)}`
                 };
                 if (!acc[att.note_id]) acc[att.note_id] = [];
                 acc[att.note_id].push(dto);
@@ -389,7 +389,7 @@ app.post('/api/notes/:id/attachments', authenticateToken, upload.single('file'),
         originalName: decodedOriginalName,
         mimeType: mimetype,
         size,
-        url: `${req.protocol}://${req.get('host')}/uploads/${filename}`
+        url: `${req.protocol}://${req.get('host')}/download/${encodeURIComponent(filename)}`
     };
 
     res.status(201).json(attachment);

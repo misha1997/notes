@@ -6,6 +6,13 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const urlRegex = /https?:\/\/[^\s]+/g;
+const apiBase = import.meta.env.VITE_API_URL || '';
+const apiOrigin = apiBase.replace(/\/api\/?$/, '');
+
+const getAttachmentUrl = (att) => {
+    if (!apiOrigin) return att.url;
+    return `${apiOrigin}/download/${encodeURIComponent(att.filename)}`;
+};
 
 const splitTextWithLinks = (text) => {
     if (!text) return [{ type: 'text', value: '' }];
@@ -185,7 +192,7 @@ const DraggableNote = forwardRef(function DraggableNote(
                             <div className="space-y-1">
                                 {editAttachments.map(att => (
                                     <div key={att.id} className="flex items-center justify-between bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
-                                        <a href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-purple-200">
+                                        <a href={getAttachmentUrl(att)} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-purple-200">
                                             <Download size={14} />
                                             <span>{att.originalName || att.filename}</span>
                                             <span className="text-xs text-gray-300">{formatFileSize(att.size)}</span>
@@ -288,7 +295,7 @@ const DraggableNote = forwardRef(function DraggableNote(
                                 {note.attachments.map(att => (
                                     <a
                                         key={att.id}
-                                        href={att.url}
+                                        href={getAttachmentUrl(att)}
                                         target="_blank"
                                         rel="noreferrer"
                                         className="group flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white transition-colors hover:border-purple-400/60 hover:bg-purple-600/10"
