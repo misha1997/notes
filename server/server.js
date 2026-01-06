@@ -16,8 +16,17 @@ const SALT_ROUNDS = 10;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 app.use(cors());
-app.use(express.json()); // Встроенный аналог bodyParser
+app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.get('/download/:filename', (req, res) => {
+    const filename = path.basename(req.params.filename);
+
+    res.setHeader('X-Accel-Redirect', `/protected-uploads/${filename}`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+
+    res.status(200).end();
+});
 
 // Настройка хранения файлов
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -362,7 +371,7 @@ app.post('/api/notes/:id/attachments', authenticateToken, upload.single('file'),
 
     const [notes] = await pool.query('SELECT id FROM notes WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [noteId, req.user.id]);
     if (!notes.length) {
-        fs.unlink(path.join(uploadsDir, req.file.filename), () => {});
+        fs.unlink(path.join(uploadsDir, req.file.filename), () => { });
         return res.status(404).json({ error: 'Заметка не найдена' });
     }
 
