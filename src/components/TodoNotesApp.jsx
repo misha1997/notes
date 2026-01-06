@@ -382,7 +382,20 @@ export default function TodoNotesApp() {
     };
 
     const handleNewFilesChange = (e) => {
-        setNewFiles(Array.from(e.target.files || []));
+        const incoming = Array.from(e.target.files || []);
+        setNewFiles(prev => {
+            const existingKeys = new Set(prev.map(f => `${f.name}-${f.size}-${f.lastModified}`));
+            const merged = [...prev];
+            for (const file of incoming) {
+                const key = `${file.name}-${file.size}-${file.lastModified}`;
+                if (!existingKeys.has(key)) {
+                    existingKeys.add(key);
+                    merged.push(file);
+                }
+            }
+            return merged;
+        });
+        e.target.value = '';
     };
 
     const removeNewFile = (name) => {
@@ -391,7 +404,19 @@ export default function TodoNotesApp() {
 
     const handleEditFilesChange = (e) => {
         const incoming = Array.from(e.target.files || []);
-        setNewEditFiles([...newEditFiles, ...incoming]);
+        setNewEditFiles(prev => {
+            const existingKeys = new Set(prev.map(f => `${f.name}-${f.size}-${f.lastModified}`));
+            const merged = [...prev];
+            for (const file of incoming) {
+                const key = `${file.name}-${file.size}-${file.lastModified}`;
+                if (!existingKeys.has(key)) {
+                    existingKeys.add(key);
+                    merged.push(file);
+                }
+            }
+            return merged;
+        });
+        e.target.value = '';
     };
 
     const removeNewEditFile = (name) => {
