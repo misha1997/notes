@@ -7,60 +7,72 @@ const getAuthHeader = () => ({
     'Authorization': `Bearer ${localStorage.getItem('token')}`
 });
 
+const handleForbidden = (res) => {
+    if (res.status === 403) {
+        localStorage.removeItem('token');
+        if (window.location.pathname !== '/login') {
+            window.location.assign('/login');
+        }
+    }
+    return res;
+};
+
 export const noteService = {
     // Получить все заметки
     async getAll() {
-        const res = await fetch(`/api/notes`, { headers: getHeaders() });
+        const res = handleForbidden(
+            await fetch(`/api/notes`, { headers: getHeaders() })
+        );
         return res.ok ? res.json() : [];
     },
     // Создать заметку
     async create(noteData) {
-        const res = await fetch(`/api/notes`, {
+        const res = handleForbidden(await fetch(`/api/notes`, {
             method: 'POST',
             headers: getHeaders(),
             body: JSON.stringify(noteData)
-        });
+        }));
         return res.json();
     },
     async reorder(noteIds) {
-        await fetch(`/api/notes/reorder`, {
+        handleForbidden(await fetch(`/api/notes/reorder`, {
             method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify({ noteIds })
-        });
+        }));
     },
     // Обновить заметку
     async update(id, noteData) {
-        const res = await fetch(`/api/notes/${id}`, {
+        const res = handleForbidden(await fetch(`/api/notes/${id}`, {
             method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify(noteData)
-        });
+        }));
         return res.json();
     },
     async uploadAttachment(id, file) {
         const formData = new FormData();
         formData.append('file', file);
-        const res = await fetch(`/api/notes/${id}/attachments`, {
+        const res = handleForbidden(await fetch(`/api/notes/${id}/attachments`, {
             method: 'POST',
             headers: getAuthHeader(),
             body: formData
-        });
+        }));
         if (!res.ok) throw new Error('Upload failed');
         return res.json();
     },
     async deleteAttachment(noteId, attachmentId) {
-        await fetch(`/api/notes/${noteId}/attachments/${attachmentId}`, {
+        handleForbidden(await fetch(`/api/notes/${noteId}/attachments/${attachmentId}`, {
             method: 'DELETE',
             headers: getAuthHeader()
-        });
+        }));
     },
     // Удалить заметку
     async delete(id) {
-        await fetch(`/api/notes/${id}`, {
+        handleForbidden(await fetch(`/api/notes/${id}`, {
             method: 'DELETE',
             headers: getHeaders()
-        });
+        }));
     }
 };
 
