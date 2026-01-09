@@ -253,15 +253,24 @@ app.post('/api/auth/telegram', async (req, res) => {
 
 app.get('/api/notes', authenticateToken, async (req, res) => {
     try {
+        const limitValue = Number.parseInt(req.query.limit, 10);
+        const offsetValue = Number.parseInt(req.query.offset, 10);
+        const limit = Number.isFinite(limitValue) && limitValue > 0 ? Math.min(limitValue, 100) : 25;
+        const offset = Number.isFinite(offsetValue) && offsetValue >= 0 ? offsetValue : 0;
+        const limitPlus = limit + 1;
+
         const [rows] = await pool.query(`
       SELECT n.*, GROUP_CONCAT(h.tag) as hashtags 
       FROM notes n 
       LEFT JOIN hashtags h ON n.id = h.note_id 
       WHERE n.user_id = ? AND n.deleted_at IS NULL
       GROUP BY n.id 
-      ORDER BY n.position ASC, n.timestamp DESC`, [req.user.id]);
+      ORDER BY n.position ASC, n.timestamp DESC
+      LIMIT ? OFFSET ?`, [req.user.id, limitPlus, offset]);
 
-        const noteIds = rows.map(n => n.id);
+        const hasMore = rows.length > limit;
+        const slicedRows = rows.slice(0, limit);
+        const noteIds = slicedRows.map(n => n.id);
         let attachmentsMap = {};
 
         if (noteIds.length) {
@@ -288,12 +297,12 @@ app.get('/api/notes', authenticateToken, async (req, res) => {
             }, {});
         }
 
-        const notes = rows.map(n => ({
+        const notes = slicedRows.map(n => ({
             ...n,
             hashtags: n.hashtags ? n.hashtags.split(',') : [],
             attachments: attachmentsMap[n.id] || []
         }));
-        res.json(notes);
+        res.json({ notes, hasMore });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, forwardRef, useRef } from 'react';
+import React, { useState, useEffect, forwardRef, useRef, useCallback } from 'react';
 import { Search, Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download } from 'lucide-react';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
 import { noteService } from '../api';
@@ -319,8 +319,13 @@ const DraggableNote = forwardRef(function DraggableNote(
 export default function TodoNotesApp() {
     const [loading, setLoading] = useState(true);
     const [notes, setNotes] = useState([]);
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [searchText, setSearchText] = useState('');
     const inputRef = useRef(null);
+    const loadMoreRef = useRef(null);
+    const pageSize = 25;
 
     const { logout, user } = useAuth(); // Получаем функцию выхода и данные юзера
     const navigate = useNavigate();
@@ -346,16 +351,46 @@ export default function TodoNotesApp() {
     const [newEditFiles, setNewEditFiles] = useState([]);
     const [attachmentsToRemove, setAttachmentsToRemove] = useState([]);
 
+    const loadNotes = useCallback(async () => {
+        setLoading(true);
+        const { notes: data, hasMore: more } = await noteService.getAll({ offset: 0, limit: pageSize });
+        setNotes(data);
+        setHasMore(more);
+        setPage(1);
+        setLoading(false);
+    }, [pageSize]);
+
+    const loadMore = useCallback(async () => {
+        if (loading || loadingMore || !hasMore) return;
+        setLoadingMore(true);
+        const { notes: data, hasMore: more } = await noteService.getAll({
+            offset: page * pageSize,
+            limit: pageSize
+        });
+        if (data.length) {
+            setNotes(prev => [...prev, ...data]);
+            setPage(prev => prev + 1);
+        }
+        setHasMore(more);
+        setLoadingMore(false);
+    }, [loading, loadingMore, hasMore, page, pageSize]);
+
     useEffect(() => {
         loadNotes();
-    }, []);
+    }, [loadNotes]);
 
-    const loadNotes = async () => {
-        setLoading(true);
-        const data = await noteService.getAll();
-        setNotes(data);
-        setLoading(false);
-    };
+    useEffect(() => {
+        const target = loadMoreRef.current;
+        if (!target || !hasMore) return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) loadMore();
+            },
+            { rootMargin: '200px' }
+        );
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, [loadMore, hasMore]);
 
     const autoSizeInput = () => {
         const el = inputRef.current;
@@ -727,6 +762,10 @@ export default function TodoNotesApp() {
                             ))}
                         </AnimatePresence>
                     </Reorder.Group>
+                    {hasMore && <div ref={loadMoreRef} className="h-6" />}
+                    {loadingMore && (
+                        <div className="text-center text-sm text-purple-100 py-4">Loading more...</div>
+                    )}
                 </motion.div>
             </div>
         </div>

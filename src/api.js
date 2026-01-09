@@ -19,11 +19,16 @@ const handleForbidden = (res) => {
 
 export const noteService = {
     // Получить все заметки
-    async getAll() {
+    async getAll({ offset = 0, limit = 25 } = {}) {
         const res = handleForbidden(
-            await fetch(`/api/notes`, { headers: getHeaders() })
+            await fetch(`/api/notes?offset=${offset}&limit=${limit}`, { headers: getHeaders() })
         );
-        return res.ok ? res.json() : [];
+        if (!res.ok) return { notes: [], hasMore: false };
+        const data = await res.json();
+        if (Array.isArray(data)) {
+            return { notes: data, hasMore: false };
+        }
+        return data;
     },
     // Создать заметку
     async create(noteData) {
