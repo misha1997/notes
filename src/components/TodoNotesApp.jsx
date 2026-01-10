@@ -1,4 +1,4 @@
-import React, { useState, useEffect, forwardRef, useRef, useCallback } from 'react';
+import React, { useState, useEffect, forwardRef, useRef, useCallback, useMemo, useDeferredValue, memo } from 'react';
 import { Search, Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download } from 'lucide-react';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
 import { noteService } from '../api';
@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 const urlRegex = /https?:\/\/[^\s]+/g;
 const apiBase = import.meta.env.VITE_API_URL || '';
 const apiOrigin = apiBase.replace(/\/api\/?$/, '');
+const EMPTY_ARRAY = [];
 
 const getAttachmentUrl = (att) => {
     if (!apiOrigin) return att.url;
@@ -62,10 +63,10 @@ const renderLinkedText = (text) =>
         return <span key={`text-${index}`}>{part.value}</span>;
     });
 
-const DraggableNote = forwardRef(function DraggableNote(
+const DraggableNote = memo(forwardRef(function DraggableNote(
     {
         note,
-        editingId,
+        isEditing,
         editType,
         editContent,
         editHashtags,
@@ -94,18 +95,18 @@ const DraggableNote = forwardRef(function DraggableNote(
     const [copied, setCopied] = useState(false);
     const editAreaRef = useRef(null);
 
-    const autoSizeEdit = () => {
+    const autoSizeEdit = useCallback(() => {
         const el = editAreaRef.current;
         if (!el) return;
         el.style.height = 'auto';
         el.style.height = `${Math.min(el.scrollHeight, 400)}px`;
-    };
+    }, []);
 
     useEffect(() => {
-        if (editingId === note.id) autoSizeEdit();
-    }, [editingId === note.id, editContent]);
+        if (isEditing) autoSizeEdit();
+    }, [isEditing, editContent, autoSizeEdit]);
 
-    const handleCopy = async () => {
+    const handleCopy = useCallback(async () => {
         try {
             await navigator.clipboard.writeText(note.content);
             setCopied(true);
@@ -137,7 +138,7 @@ const DraggableNote = forwardRef(function DraggableNote(
                 <GripVertical className="text-gray-400" size={20} />
             </div>
 
-            {editingId === note.id ? (
+            {isEditing ? (
                 <div className="space-y-4 ml-6">
                     <div className="flex gap-2">
                         <button
@@ -238,7 +239,7 @@ const DraggableNote = forwardRef(function DraggableNote(
                         <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center gap-2">
                             {note.type === 'code' ? <Code size={16} className="text-purple-400" /> : <FileText size={16} className="text-blue-400" />}
-                            <span className="text-xs text-gray-400">{formatDate(note.timestamp)}</span>
+                            <span className="text-xs text-gray-400">{formattedDate}</span>
                         </div>
                         <div className="relative flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
                             <AnimatePresence>
@@ -271,11 +272,7 @@ const DraggableNote = forwardRef(function DraggableNote(
                             </button>
                         </div>
                     </div>
-                    {note.type === 'code' ? (
-                        <pre className="text-white whitespace-pre-wrap break-words font-mono text-sm bg-black/20 p-3 rounded-lg border border-white/5">{note.content}</pre>
-                    ) : (
-                        <div className="text-white whitespace-pre-wrap break-words">{renderLinkedText(note.content)}</div>
-                    )}
+                    {renderedBody}
                     {note.hashtags?.length > 0 ? (
                         <div className="flex flex-wrap gap-2 mt-4">
                             {note.hashtags?.map(tag => (
@@ -314,7 +311,8 @@ const DraggableNote = forwardRef(function DraggableNote(
             )}
         </Reorder.Item>
     );
-});
+}));
+DraggableNote.displayName = 'DraggableNote';
 
 export default function TodoNotesApp() {
     const [loading, setLoading] = useState(true);
@@ -329,6 +327,7 @@ export default function TodoNotesApp() {
 
     const { logout, user } = useAuth(); // Получаем функцию выхода и данные юзера
     const navigate = useNavigate();
+    const deferredSearchText = useDeferredValue(searchText);
 
     const handleLogout = () => {
         logout();
@@ -438,7 +437,19 @@ export default function TodoNotesApp() {
             return merged;
         });
         e.target.value = '';
-    };
+    }, [note.content]);
+
+    const formattedDate = useMemo(() => formatDate(note.timestamp), [formatDate, note.timestamp]);
+    const renderedBody = useMemo(() => {
+        if (note.type === 'code') {
+            return (
+                <pre className="text-white whitespace-pre-wrap break-words font-mono text-sm bg-black/20 p-3 rounded-lg border border-white/5">
+                    {note.content}
+                </pre>
+            );
+        }
+        return <div className="text-white whitespace-pre-wrap break-words">{renderLinkedText(note.content)}</div>;
+    }, [note.type, note.content]);
 
     const removeNewFile = (name) => {
         setNewFiles(newFiles.filter(f => f.name !== name));
@@ -510,7 +521,7 @@ export default function TodoNotesApp() {
         }
     };
 
-    const startEdit = (note) => {
+    const startEdit = useCallback((note) => {
         setEditingId(note.id);
         setEditContent(note.content);
         setEditType(note.type);
@@ -519,7 +530,7 @@ export default function TodoNotesApp() {
         setEditAttachments(note.attachments || []);
         setNewEditFiles([]);
         setAttachmentsToRemove([]);
-    };
+    }, []);
 
     const saveEdit = async () => {
         const updatedData = {
@@ -560,20 +571,32 @@ export default function TodoNotesApp() {
         setEditAttachments([]);
     };
 
-    const deleteNote = async (id) => {
+    const deleteNote = useCallback(async (id) => {
         await noteService.delete(id);
-        setNotes(notes.filter(n => n.id !== id));
-    };
+        setNotes(prev => prev.filter(n => n.id !== id));
+    }, []);
 
-    const filteredNotes = notes.filter(note => {
-        const matchesText = note.content.toLowerCase().includes(searchText.toLowerCase());
-        const matchesHashtag = note.hashtags && note.hashtags.some(tag =>
-            tag.toLowerCase().includes(searchText.toLowerCase())
-        );
-        return matchesText || matchesHashtag;
-});
+    const filteredNotes = useMemo(() => {
+        const needle = deferredSearchText.trim().toLowerCase();
+        if (!needle) return notes;
+        return notes.filter(note => {
+            const matchesText = note.content.toLowerCase().includes(needle);
+            const matchesHashtag = note.hashtags && note.hashtags.some(tag =>
+                tag.toLowerCase().includes(needle)
+            );
+            return matchesText || matchesHashtag;
+        });
+    }, [notes, deferredSearchText]);
 
-    const formatDate = (dateString) => {
+    const dateFormatter = useMemo(() => new Intl.DateTimeFormat('ru-RU', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    }), []);
+
+    const formatDate = useCallback((dateString) => {
         if (!dateString) return "";
 
         const date = new Date(dateString);
@@ -583,22 +606,16 @@ export default function TodoNotesApp() {
             return dateString; // возвращаем как есть, если это не дата
         }
 
-        return new Intl.DateTimeFormat('ru-RU', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        }).format(date);
-    };
+        return dateFormatter.format(date);
+    }, [dateFormatter]);
 
-    const formatFileSize = (bytes) => {
+    const formatFileSize = useCallback((bytes) => {
         if (!bytes) return '0 B';
         const units = ['B', 'KB', 'MB', 'GB'];
         const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
         const value = bytes / Math.pow(1024, i);
         return `${value.toFixed(value >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
-    };
+    }, []);
 
     const handleReorder = async (newOrder) => {
         // 1. Сначала обновляем локальный стейт для мгновенного отклика UI
@@ -732,34 +749,37 @@ export default function TodoNotesApp() {
                     {/* СПИСОК ЗАМЕТОК */}
                     <Reorder.Group axis="y" values={notes} onReorder={handleReorder} className="space-y-4">
                         <AnimatePresence mode="popLayout">
-                            {filteredNotes.map(note => (
-                                <DraggableNote
-                                    key={note.id}
-                                    note={note}
-                                    editingId={editingId}
-                                    editType={editType}
-                                    editContent={editContent}
-                                    editHashtags={editHashtags}
-                                    editHashtagInput={editHashtagInput}
-                                    setEditType={setEditType}
-                                    setEditContent={setEditContent}
-                                    setEditHashtags={setEditHashtags}
-                                    setEditHashtagInput={setEditHashtagInput}
-                                    startEdit={startEdit}
-                                    deleteNote={deleteNote}
-                                    saveEdit={saveEdit}
-                                    formatDate={formatDate}
-                                    setEditingId={setEditingId}
-                                    addHashtagEdit={addHashtagEdit}
-                                    setSearchText={setSearchText}
-                                    formatFileSize={formatFileSize}
-                                    editAttachments={editAttachments}
-                                    newEditFiles={newEditFiles}
-                                    removeExistingAttachment={removeExistingAttachment}
-                                    removeNewEditFile={removeNewEditFile}
-                                    handleEditFilesChange={handleEditFilesChange}
-                                />
-                            ))}
+                            {filteredNotes.map(note => {
+                                const isEditing = editingId === note.id;
+                                return (
+                                    <DraggableNote
+                                        key={note.id}
+                                        note={note}
+                                        isEditing={isEditing}
+                                        editType={isEditing ? editType : 'text'}
+                                        editContent={isEditing ? editContent : ''}
+                                        editHashtags={isEditing ? editHashtags : EMPTY_ARRAY}
+                                        editHashtagInput={isEditing ? editHashtagInput : ''}
+                                        setEditType={setEditType}
+                                        setEditContent={setEditContent}
+                                        setEditHashtags={setEditHashtags}
+                                        setEditHashtagInput={setEditHashtagInput}
+                                        startEdit={startEdit}
+                                        deleteNote={deleteNote}
+                                        saveEdit={isEditing ? saveEdit : undefined}
+                                        formatDate={formatDate}
+                                        setEditingId={setEditingId}
+                                        addHashtagEdit={isEditing ? addHashtagEdit : undefined}
+                                        setSearchText={setSearchText}
+                                        formatFileSize={formatFileSize}
+                                        editAttachments={isEditing ? editAttachments : EMPTY_ARRAY}
+                                        newEditFiles={isEditing ? newEditFiles : EMPTY_ARRAY}
+                                        removeExistingAttachment={isEditing ? removeExistingAttachment : undefined}
+                                        removeNewEditFile={isEditing ? removeNewEditFile : undefined}
+                                        handleEditFilesChange={isEditing ? handleEditFilesChange : undefined}
+                                    />
+                                );
+                            })}
                         </AnimatePresence>
                     </Reorder.Group>
                     {hasMore && <div ref={loadMoreRef} className="h-6" />}
