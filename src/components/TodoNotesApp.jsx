@@ -114,7 +114,19 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
         } catch (err) {
             console.error('Не удалось скопировать текст', err);
         }
-    };
+    }, [note.content]);
+
+    const formattedDate = useMemo(() => formatDate(note.timestamp), [formatDate, note.timestamp]);
+    const renderedBody = useMemo(() => {
+        if (note.type === 'code') {
+            return (
+                <pre className="text-white whitespace-pre-wrap break-words font-mono text-sm bg-black/20 p-3 rounded-lg border border-white/5">
+                    {note.content}
+                </pre>
+            );
+        }
+        return <div className="text-white whitespace-pre-wrap break-words">{renderLinkedText(note.content)}</div>;
+    }, [note.type, note.content]);
 
     return (
         <Reorder.Item
@@ -422,7 +434,7 @@ export default function TodoNotesApp() {
         }
     };
 
-    const handleNewFilesChange = (e) => {
+    const handleNewFilesChange = useCallback((e) => {
         const incoming = Array.from(e.target.files || []);
         setNewFiles(prev => {
             const existingKeys = new Set(prev.map(f => `${f.name}-${f.size}-${f.lastModified}`));
@@ -437,19 +449,7 @@ export default function TodoNotesApp() {
             return merged;
         });
         e.target.value = '';
-    }, [note.content]);
-
-    const formattedDate = useMemo(() => formatDate(note.timestamp), [formatDate, note.timestamp]);
-    const renderedBody = useMemo(() => {
-        if (note.type === 'code') {
-            return (
-                <pre className="text-white whitespace-pre-wrap break-words font-mono text-sm bg-black/20 p-3 rounded-lg border border-white/5">
-                    {note.content}
-                </pre>
-            );
-        }
-        return <div className="text-white whitespace-pre-wrap break-words">{renderLinkedText(note.content)}</div>;
-    }, [note.type, note.content]);
+    }, []);
 
     const removeNewFile = (name) => {
         setNewFiles(newFiles.filter(f => f.name !== name));
