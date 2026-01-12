@@ -141,7 +141,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
             className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 hover:border-purple-400 transition-colors group relative"
         >
             <div
-                className="absolute left-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1"
+                className="absolute left-1 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1"
                 onPointerDown={(e) => {
                     e.preventDefault();
                     dragControls.start(e);
@@ -177,7 +177,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                     />
 
                     <div className="flex items-center gap-2 flex-wrap">
-                        <div className="relative w-[180px]">
+                        <div className="relative w-full sm:w-[180px]">
                             <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                             <input
                                 type="text"
@@ -253,7 +253,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                             {note.type === 'code' ? <Code size={16} className="text-purple-400" /> : <FileText size={16} className="text-blue-400" />}
                             <span className="text-xs text-gray-400">{formattedDate}</span>
                         </div>
-                        <div className="relative flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                        <div className="relative flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300">
                             <AnimatePresence>
                                 {copied && (
                                     <motion.span
@@ -633,19 +633,19 @@ export default function TodoNotesApp() {
     if (loading) return <div className="text-white text-center mt-20">Загрузка...</div>;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 sm:p-6">
             <div className="max-w-4xl mx-auto relative">
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-8 border border-white/20 mt-12"
+                    className="bg-white/10 backdrop-blur-lg rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-8 border border-white/20 mt-6 sm:mt-12"
                 >
-                    <div className='flex items-center justify-between mb-8'>
+                    <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6 sm:mb-8'>
                         <h1 className="text-2xl font-bold text-white text-center">📝 Мои Заметки</h1>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 w-full sm:w-auto">
                             <button
                                 onClick={handleLogout}
-                                className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl border border-red-500/20 transition-all hover:scale-105 active:scale-95"
+                                className="flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl border border-red-500/20 transition-all hover:scale-105 active:scale-95 w-full sm:w-auto"
                                 title="Выйти из аккаунта"
                             >
                                 <LogOut size={18} />
@@ -656,11 +656,11 @@ export default function TodoNotesApp() {
 
                     {/* ВЕРХНЯЯ ПАНЕЛЬ */}
                     <div className="space-y-4 mb-8">
-                        <div className="flex gap-2 mb-3">
-                            <button onClick={() => setNewNoteType('text')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${newNoteType === 'text' ? 'bg-purple-600 text-white scale-105' : 'bg-white/10 text-gray-300'}`}>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            <button onClick={() => setNewNoteType('text')} className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all w-full sm:w-auto ${newNoteType === 'text' ? 'bg-purple-600 text-white scale-105' : 'bg-white/10 text-gray-300'}`}>
                                 <FileText size={16} /> Текст
                             </button>
-                            <button onClick={() => setNewNoteType('code')} className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${newNoteType === 'code' ? 'bg-purple-600 text-white scale-105' : 'bg-white/10 text-gray-300'}`}>
+                            <button onClick={() => setNewNoteType('code')} className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all w-full sm:w-auto ${newNoteType === 'code' ? 'bg-purple-600 text-white scale-105' : 'bg-white/10 text-gray-300'}`}>
                                 <Code size={16} /> Код
                             </button>
                         </div>
@@ -685,7 +685,7 @@ export default function TodoNotesApp() {
                         </div>
 
                         <div className="flex items-center gap-2 flex-wrap">
-                            <div className="relative w-[200px]">
+                            <div className="relative w-full sm:w-[200px]">
                                 <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                 <input
                                     type="text"
@@ -701,7 +701,7 @@ export default function TodoNotesApp() {
                                     <motion.span
                                         key={tag}
                                         initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/50 border border-purple-400/60 rounded-full text-sm text-white"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/50 border border-purple-400/60 rounded-full text-sm text-white w-full sm:w-auto justify-center"
                                     >
                                         {tag}
                                         <button onClick={() => setCurrentHashtags(currentHashtags.filter(t => t !== tag))}><X size={14} /></button>
@@ -718,7 +718,7 @@ export default function TodoNotesApp() {
                             {newFiles.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
                                     {newFiles.map(file => (
-                                        <span key={file.name} className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-sm text-white">
+                                        <span key={file.name} className="flex items-center justify-between gap-2 bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-sm text-white w-full sm:w-auto">
                                             {file.name}
                                             <button onClick={() => removeNewFile(file.name)} className="text-red-200 hover:text-red-100">
                                                 <X size={14} />

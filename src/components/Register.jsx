@@ -69,14 +69,14 @@ export default function Register() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-6">
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4 sm:p-6">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
                     <h1 className="text-4xl font-bold text-white mb-2">Создать аккаунт</h1>
                     <p className="text-purple-200/70">Присоединяйтесь к сообществу MyNotes</p>
                 </div>
 
-                <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-2xl">
+                <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-5 sm:p-8 border border-white/20 shadow-2xl">
                     {error && (
                         <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl flex items-center gap-3 text-red-200 text-sm animate-pulse">
                             <AlertCircle size={18} className="shrink-0" />
@@ -95,7 +95,7 @@ export default function Register() {
                                     name="username"
                                     value={formData.username}
                                     onChange={handleChange}
-                                    className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                                    className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                                     placeholder="ivan_ivanov"
                                     disabled={loading}
                                 />
@@ -112,7 +112,7 @@ export default function Register() {
                                     name="email"
                                     value={formData.email}
                                     onChange={handleChange}
-                                    className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                                    className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                                     placeholder="example@mail.com"
                                     disabled={loading}
                                 />
@@ -129,7 +129,7 @@ export default function Register() {
                                     name="password"
                                     value={formData.password}
                                     onChange={handleChange}
-                                    className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                                    className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                                     placeholder="••••••••"
                                     disabled={loading}
                                 />
@@ -146,7 +146,7 @@ export default function Register() {
                                     name="confirmPassword"
                                     value={formData.confirmPassword}
                                     onChange={handleChange}
-                                    className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                                    className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                                     placeholder="••••••••"
                                     disabled={loading}
                                 />
@@ -156,7 +156,7 @@ export default function Register() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800/50 text-white py-4 rounded-2xl font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-6 shadow-lg shadow-purple-900/40"
+                            className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800/50 text-white py-3.5 sm:py-4 rounded-2xl font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-6 shadow-lg shadow-purple-900/40"
                         >
                             {loading ? (
                                 <Loader2 className="animate-spin" size={22} />

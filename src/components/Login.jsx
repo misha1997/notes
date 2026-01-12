@@ -41,7 +41,7 @@ export default function Login() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-6">
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4 sm:p-6">
             <div className="w-full max-w-md">
                 {/* Заголовок */}
                 <div className="text-center mb-8">
@@ -49,7 +49,7 @@ export default function Login() {
                     <p className="text-purple-200/70">Войдите, чтобы управлять своими заметками</p>
                 </div>
 
-                <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-2xl">
+                <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-5 sm:p-8 border border-white/20 shadow-2xl">
                     {/* Вывод ошибки */}
                     {error && (
                         <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl flex items-center gap-3 text-red-200 text-sm animate-shake">
@@ -68,7 +68,7 @@ export default function Login() {
                                     type="text"
                                     value={loginIdentifier}
                                     onChange={(e) => setLoginIdentifier(e.target.value)}
-                                    className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                                    className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                                     placeholder="Введите ваш логин"
                                     disabled={loading}
                                 />
@@ -84,7 +84,7 @@ export default function Login() {
                                     type="password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full pl-12 pr-4 py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                                    className="w-full pl-12 pr-4 py-3 sm:py-3.5 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                                     placeholder="••••••••"
                                     disabled={loading}
                                 />
@@ -95,7 +95,7 @@ export default function Login() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800/50 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold shadow-lg shadow-purple-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-4"
+                            className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800/50 disabled:cursor-not-allowed text-white py-3.5 sm:py-4 rounded-2xl font-bold shadow-lg shadow-purple-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-4"
                         >
                             {loading ? (
                                 <Loader2 className="animate-spin" size={22} />
