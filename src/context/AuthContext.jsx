@@ -1,17 +1,16 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { authService } from '../api'; // тот сервис, что мы обсуждали ранее
+import { authService } from '../api';
 
 const AuthContext = createContext(null);
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // При загрузке проверяем, есть ли токен в localStorage
         const token = localStorage.getItem('token');
         if (token) {
-            // Можно добавить запрос к /api/auth/me для проверки валидности
             setUser({ loggedIn: true });
         }
         setLoading(false);
@@ -36,7 +35,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const register = async (username, email, password) => {
-        const res = await fetch(`/api/auth/register`, {
+        const res = await fetch(`${API_URL}/api/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password })

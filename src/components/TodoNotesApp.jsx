@@ -54,7 +54,7 @@ const renderLinkedText = (text) =>
                     href={part.value}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-purple-300 underline underline-offset-2 hover:text-purple-200 break-all"
+                    className="text-gray-300 underline underline-offset-2 hover:text-gray-100 break-all"
                 >
                     {part.value}
                 </a>
@@ -120,12 +120,12 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
     const renderedBody = useMemo(() => {
         if (note.type === 'code') {
             return (
-                <pre className="text-white whitespace-pre-wrap break-words font-mono text-sm bg-black/20 p-3 rounded-lg border border-white/5">
+                <pre className="text-gray-200 whitespace-pre-wrap break-words font-mono text-sm bg-[#0f0f0f] p-3 rounded-lg border border-[#2a2a2a]">
                     {note.content}
                 </pre>
             );
         }
-        return <div className="text-white whitespace-pre-wrap break-words">{renderLinkedText(note.content)}</div>;
+        return <div className="text-gray-200 whitespace-pre-wrap break-words">{renderLinkedText(note.content)}</div>;
     }, [note.type, note.content]);
 
     return (
@@ -135,33 +135,33 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
             dragListener={false}
             dragControls={dragControls}
             ref={ref}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 hover:border-purple-400 transition-colors group relative"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="bg-[#1a1a1a] rounded-xl p-4 sm:p-5 border border-[#2a2a2a] hover:border-[#404040] transition-colors group relative"
         >
             <div
-                className="absolute left-1 top-1/2 -translate-y-1/2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1"
+                className="absolute left-2 top-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing p-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                 onPointerDown={(e) => {
                     e.preventDefault();
                     dragControls.start(e);
                 }}
             >
-                <GripVertical className="text-gray-400" size={20} />
+                <GripVertical className="text-[#666666]" size={20} />
             </div>
 
             {isEditing ? (
-                <div className="space-y-4 ml-6">
+                <div className="space-y-4 ml-6 sm:ml-8">
                     <div className="flex gap-2">
                         <button
                             onClick={() => setEditType('text')}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all ${editType === 'text' ? 'bg-purple-600 text-white' : 'bg-white/10 text-gray-300'}`}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all min-h-[40px] ${editType === 'text' ? 'bg-gray-200 text-gray-900 font-medium' : 'bg-[#262626] text-gray-400 border border-[#404040]'}`}
                         >
                             <FileText size={14} /> Текст
                         </button>
                         <button
                             onClick={() => setEditType('code')}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all ${editType === 'code' ? 'bg-purple-600 text-white' : 'bg-white/10 text-gray-300'}`}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all min-h-[40px] ${editType === 'code' ? 'bg-gray-200 text-gray-900 font-medium' : 'bg-[#262626] text-gray-400 border border-[#404040]'}`}
                         >
                             <Code size={14} /> Код
                         </button>
@@ -173,44 +173,46 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                         onChange={(e) => setEditContent(e.target.value)}
                         onInput={autoSizeEdit}
                         rows={1}
-                        className={`w-full p-4 bg-black/30 border border-white/30 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[100px] max-h-[260px] resize-y overflow-y-auto scrollbar-styled ${editType === 'code' ? 'font-mono text-sm' : ''}`}
+                        className={`w-full p-4 bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg text-gray-100 focus:outline-none focus:border-[#404040] min-h-[100px] max-h-[260px] resize-y overflow-y-auto scrollbar-styled ${editType === 'code' ? 'font-mono text-sm' : ''}`}
                     />
 
                     <div className="flex items-center gap-2 flex-wrap">
                         <div className="relative w-full sm:w-[180px]">
-                            <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                            <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
                             <input
                                 type="text"
                                 value={editHashtagInput}
                                 onChange={(e) => setEditHashtagInput(e.target.value)}
                                 onKeyPress={addHashtagEdit}
-                                placeholder="Тег..."
-                                className="w-full pl-8 pr-3 py-1.5 bg-black/30 border border-white/30 rounded-lg text-sm text-white focus:outline-none"
+                                placeholder="Добавить тег..."
+                                className="w-full pl-8 pr-3 py-2 bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg text-sm text-gray-200 focus:outline-none focus:border-[#404040] min-h-[40px]"
                             />
                         </div>
                         {editHashtags.map((tag) => (
-                            <span key={tag} className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-600/50 border border-blue-400/60 rounded-full text-xs text-white">
+                            <span key={tag} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#262626] border border-[#404040] rounded-full text-xs text-gray-300">
                                 {tag}
-                                <button onClick={() => setEditHashtags(editHashtags.filter(t => t !== tag))}><X size={12} /></button>
+                                <button onClick={() => setEditHashtags(editHashtags.filter(t => t !== tag))} className="text-gray-500 hover:text-gray-300">
+                                    <X size={12} />
+                                </button>
                             </span>
                         ))}
                     </div>
 
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-sm text-purple-100">
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
                             <Paperclip size={14} />
                             <span>Вложения</span>
                         </div>
                         {editAttachments.length > 0 && (
-                            <div className="space-y-1">
+                            <div className="space-y-2">
                                 {editAttachments.map(att => (
-                                    <div key={att.id} className="flex items-center justify-between bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
-                                        <a href={getAttachmentUrl(att)} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-purple-200">
-                                            <Download size={14} />
-                                            <span>{att.originalName || att.filename}</span>
-                                            <span className="text-xs text-gray-300">{formatFileSize(att.size)}</span>
+                                    <div key={att.id} className="flex items-center justify-between bg-[#0f0f0f] border border-[#2a2a2a] rounded-lg px-3 py-2.5 text-sm text-gray-200">
+                                        <a href={getAttachmentUrl(att)} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-gray-100 min-w-0">
+                                            <Download size={14} className="flex-shrink-0" />
+                                            <span className="truncate">{att.originalName || att.filename}</span>
+                                            <span className="text-xs text-gray-500 flex-shrink-0">{formatFileSize(att.size)}</span>
                                         </a>
-                                        <button onClick={() => removeExistingAttachment(att.id)} className="text-red-300 hover:text-red-200">
+                                        <button onClick={() => removeExistingAttachment(att.id)} className="text-gray-500 hover:text-red-400 flex-shrink-0 ml-2">
                                             Удалить
                                         </button>
                                     </div>
@@ -218,50 +220,53 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                             </div>
                         )}
                         {newEditFiles.length > 0 && (
-                            <div className="space-y-1">
+                            <div className="space-y-2">
                                 {newEditFiles.map(file => (
-                                    <div key={file.name} className="flex items-center justify-between bg-white/5 rounded-lg px-3 py-1.5 text-sm text-white">
-                                        <span>{file.name}</span>
-                                        <button onClick={() => removeNewEditFile(file.name)} className="text-red-300 hover:text-red-200">
+                                    <div key={file.name} className="flex items-center justify-between bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-gray-300">
+                                        <span className="truncate">{file.name}</span>
+                                        <button onClick={() => removeNewEditFile(file.name)} className="text-gray-500 hover:text-red-400 flex-shrink-0">
                                             Удалить
                                         </button>
                                     </div>
                                 ))}
                             </div>
                         )}
-                        <input
-                            type="file"
-                            multiple
-                            onChange={handleEditFilesChange}
-                            className="text-sm text-white file:mr-3 file:rounded-md file:border-none file:bg-purple-600 file:px-3 file:py-1 file:text-white hover:file:bg-purple-700"
-                        />
+                        <label className="inline-flex items-center gap-2 px-4 py-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg text-sm text-gray-400 hover:text-gray-200 hover:border-[#404040] cursor-pointer transition-colors">
+                            <span>Выбрать файл</span>
+                            <input
+                                type="file"
+                                multiple
+                                onChange={handleEditFilesChange}
+                                className="hidden"
+                            />
+                        </label>
                     </div>
 
-                    <div className="flex gap-2 pt-2">
-                        <button onClick={saveEdit} className="bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg text-white text-sm flex items-center gap-2 transition-colors">
+                    <div className="flex gap-3 pt-2">
+                        <button onClick={saveEdit} className="bg-gray-100 hover:bg-white text-gray-900 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors min-h-[44px]">
                             <Save size={14} /> Сохранить
                         </button>
-                        <button onClick={() => setEditingId(null)} className="bg-gray-600 hover:bg-gray-700 px-3 py-1.5 rounded-lg text-white text-sm flex items-center gap-2 transition-colors">
+                        <button onClick={() => setEditingId(null)} className="bg-transparent hover:bg-[#262626] text-gray-400 hover:text-gray-200 px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors border border-[#404040] min-h-[44px]">
                             <X size={14} /> Отмена
                         </button>
                     </div>
                 </div>
             ) : (
-                <div className="ml-6">
-                        <div className="flex items-start justify-between mb-2">
+                <div className="ml-6 sm:ml-8">
+                    <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
-                            {note.type === 'code' ? <Code size={16} className="text-purple-400" /> : <FileText size={16} className="text-blue-400" />}
-                            <span className="text-xs text-gray-400">{formattedDate}</span>
+                            {note.type === 'code' ? <Code size={16} className="text-gray-500" /> : <FileText size={16} className="text-gray-500" />}
+                            <span className="text-xs text-gray-500">{formattedDate}</span>
                         </div>
-                        <div className="relative flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300">
+                        <div className="relative flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200">
                             <AnimatePresence>
                                 {copied && (
                                     <motion.span
-                                        initial={{ opacity: 0, y: -6 }}
+                                        initial={{ opacity: 0, y: -4 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -6 }}
-                                        transition={{ duration: 0.18 }}
-                                        className="absolute right-0 -top-7 text-xs text-purple-50 bg-purple-600/70 px-2 py-1 rounded-full shadow-lg backdrop-blur-sm"
+                                        exit={{ opacity: 0, y: -4 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="absolute right-0 -top-6 text-xs text-gray-300 bg-[#262626] px-2 py-0.5 rounded"
                                     >
                                         Скопировано
                                     </motion.span>
@@ -270,35 +275,37 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                             {note.type === 'code' && (
                                 <button
                                     onClick={handleCopy}
-                                    className="p-2 hover:bg-purple-500/20 text-purple-200 rounded-full transition-colors"
+                                    className="p-2.5 sm:p-2 hover:bg-[#262626] text-gray-400 hover:text-gray-200 rounded-lg transition-colors"
                                     title={copied ? "Скопировано" : "Скопировать код"}
                                 >
                                     <Copy size={18} />
                                 </button>
                             )}
-                            <button onClick={() => startEdit(note)} className="p-2 hover:bg-blue-500/20 text-blue-400 rounded-full transition-colors" title="Редактировать">
+                            <button onClick={() => startEdit(note)} className="p-2.5 sm:p-2 hover:bg-[#262626] text-gray-400 hover:text-gray-200 rounded-lg transition-colors" title="Редактировать">
                                 <Edit2 size={18} />
                             </button>
-                            <button onClick={() => deleteNote(note.id)} className="p-2 hover:bg-red-500/20 text-red-400 rounded-full transition-colors" title="Удалить">
+                            <button onClick={() => deleteNote(note.id)} className="p-2.5 sm:p-2 hover:bg-[#262626] text-gray-400 hover:text-red-400 rounded-lg transition-colors" title="Удалить">
                                 <Trash2 size={18} />
                             </button>
                         </div>
                     </div>
-                    {renderedBody}
+                    <div className="text-gray-200 leading-relaxed">{renderedBody}</div>
+
                     {note.hashtags?.length > 0 ? (
                         <div className="flex flex-wrap gap-2 mt-4">
                             {note.hashtags?.map(tag => (
-                                <span key={tag} onClick={() => setSearchText(tag)} className="px-2.5 py-1 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/50 rounded-full text-xs text-purple-200 cursor-pointer transition-colors">
+                                <span key={tag} onClick={() => setSearchText(tag)} className="px-2.5 py-1 bg-[#262626] border border-[#404040] rounded-full text-xs text-gray-300 cursor-pointer hover:bg-[#2a2a2a] hover:border-[#525252] transition-colors">
                                     {tag}
                                 </span>
                             ))}
                         </div>
                     ) : null}
+
                     {note.attachments?.length > 0 ? (
                         <div className="mt-4 space-y-2">
-                            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-purple-200/90">
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
                                 <Paperclip size={14} />
-                                <span>Файлы ({note.attachments.length})</span>
+                                <span>Вложения ({note.attachments.length})</span>
                             </div>
                             <div className="flex flex-col gap-2">
                                 {note.attachments.map(att => (
@@ -307,13 +314,13 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                         href={getAttachmentUrl(att)}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="group flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white transition-colors hover:border-purple-400/60 hover:bg-purple-600/10"
+                                        className="group flex items-center justify-between rounded-lg bg-[#0f0f0f] border border-[#2a2a2a] px-3 py-2.5 text-sm text-gray-300 transition-colors hover:border-[#404040] hover:bg-[#141414]"
                                     >
                                         <div className="flex items-center gap-2 min-w-0">
-                                            <Download size={14} className="text-purple-200" />
+                                            <Download size={14} className="text-gray-500 flex-shrink-0" />
                                             <span className="truncate">{att.originalName || att.filename}</span>
                                         </div>
-                                        <span className="text-xs text-gray-300 group-hover:text-purple-100">{formatFileSize(att.size)}</span>
+                                        <span className="text-xs text-gray-500 flex-shrink-0">{formatFileSize(att.size)}</span>
                                     </a>
                                 ))}
                             </div>
@@ -633,19 +640,19 @@ export default function TodoNotesApp() {
     if (loading) return <div className="text-white text-center mt-20">Загрузка...</div>;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 sm:p-6">
-            <div className="max-w-4xl mx-auto relative">
+        <div className="min-h-screen bg-[#0a0a0a] p-3 sm:p-6">
+            <div className="max-w-3xl mx-auto relative">
                 <motion.div
-                    initial={{ opacity: 0, y: -20 }}
+                    initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/10 backdrop-blur-lg rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-8 border border-white/20 mt-6 sm:mt-12"
+                    className="bg-[#141414] rounded-none sm:rounded-xl shadow-none sm:shadow-2xl p-3 sm:p-6 border-0 sm:border border-[#2a2a2a] mt-0 sm:mt-8"
                 >
-                    <div className='flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6 sm:mb-8'>
-                        <h1 className="text-2xl font-bold text-white text-center">📝 Мои Заметки</h1>
-                        <div className="flex items-center gap-4 w-full sm:w-auto">
+                    <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6'>
+                        <h1 className="text-xl sm:text-2xl font-semibold text-gray-100 tracking-tight">Мои заметки</h1>
+                        <div className="flex items-center gap-3 w-full sm:w-auto">
                             <button
                                 onClick={handleLogout}
-                                className="flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-4 py-2 rounded-xl border border-red-500/20 transition-all hover:scale-105 active:scale-95 w-full sm:w-auto"
+                                className="flex items-center justify-center gap-2 bg-transparent hover:bg-[#1f1f1f] text-gray-400 hover:text-gray-200 px-4 py-2.5 sm:py-2 rounded-lg border border-[#2a2a2a] hover:border-[#404040] transition-colors active:bg-[#1a1a1a] w-full sm:w-auto text-sm sm:text-base min-h-[44px]"
                                 title="Выйти из аккаунта"
                             >
                                 <LogOut size={18} />
@@ -655,18 +662,18 @@ export default function TodoNotesApp() {
                     </div>
 
                     {/* ВЕРХНЯЯ ПАНЕЛЬ */}
-                    <div className="space-y-4 mb-8">
-                        <div className="flex flex-wrap gap-2 mb-3">
-                            <button onClick={() => setNewNoteType('text')} className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all w-full sm:w-auto ${newNoteType === 'text' ? 'bg-purple-600 text-white scale-105' : 'bg-white/10 text-gray-300'}`}>
+                    <div className="space-y-3 sm:space-y-4 mb-6 sm:mb-8">
+                        <div className="flex gap-2">
+                            <button onClick={() => setNewNoteType('text')} className={`flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-lg transition-all text-sm sm:text-base min-h-[44px] flex-1 sm:flex-none ${newNoteType === 'text' ? 'bg-gray-200 text-gray-900 font-medium' : 'bg-[#1f1f1f] text-gray-400 border border-[#2a2a2a] hover:border-[#404040]'}`}>
                                 <FileText size={16} /> Текст
                             </button>
-                            <button onClick={() => setNewNoteType('code')} className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all w-full sm:w-auto ${newNoteType === 'code' ? 'bg-purple-600 text-white scale-105' : 'bg-white/10 text-gray-300'}`}>
+                            <button onClick={() => setNewNoteType('code')} className={`flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-lg transition-all text-sm sm:text-base min-h-[44px] flex-1 sm:flex-none ${newNoteType === 'code' ? 'bg-gray-200 text-gray-900 font-medium' : 'bg-[#1f1f1f] text-gray-400 border border-[#2a2a2a] hover:border-[#404040]'}`}>
                                 <Code size={16} /> Код
                             </button>
                         </div>
 
                         <div className="relative">
-                            <Search className="absolute left-4 top-4 text-gray-400" size={20} />
+                            <Search className="absolute left-3 sm:left-4 top-4 sm:top-4 text-gray-500" size={18} />
                             <textarea
                                 ref={inputRef}
                                 value={searchText}
@@ -679,67 +686,71 @@ export default function TodoNotesApp() {
                                 }}
                                 onInput={autoSizeInput}
                                 rows={1}
-                                placeholder="Введите текст или поиск... (Ctrl + Enter — добавить)"
-                                className="w-full pl-12 pr-4 py-4 bg-white/20 border border-white/30 rounded-2xl text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all min-h-[48px] max-h-[240px] resize-y overflow-y-auto scrollbar-styled"
+                                placeholder="Введите текст заметки..."
+                                className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-3.5 sm:py-4 bg-[#1a1a1a] border border-[#2a2a2a] focus:border-[#525252] rounded-lg sm:rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none transition-colors min-h-[56px] sm:min-h-[48px] max-h-[200px] resize-y overflow-y-auto scrollbar-styled text-base"
                             />
                         </div>
 
                         <div className="flex items-center gap-2 flex-wrap">
-                            <div className="relative w-full sm:w-[200px]">
-                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                            <div className="relative w-full sm:w-[180px]">
+                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
                                 <input
                                     type="text"
                                     value={hashtagInput}
                                     onChange={(e) => setHashtagInput(e.target.value)}
                                     onKeyPress={addHashtagMain}
-                                    placeholder="Хештег..."
-                                    className="w-full pl-9 pr-3 py-2 bg-white/20 border border-white/30 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    placeholder="Тег (Enter)"
+                                    className="w-full pl-9 pr-3 py-2.5 sm:py-2 bg-[#1a1a1a] border border-[#2a2a2a] focus:border-[#525252] rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none transition-colors min-h-[44px]"
                                 />
                             </div>
                             <AnimatePresence>
                                 {currentHashtags.map((tag) => (
                                     <motion.span
                                         key={tag}
-                                        initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/50 border border-purple-400/60 rounded-full text-sm text-white w-full sm:w-auto justify-center"
+                                        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#262626] border border-[#404040] rounded-full text-xs sm:text-sm text-gray-300"
                                     >
                                         {tag}
-                                        <button onClick={() => setCurrentHashtags(currentHashtags.filter(t => t !== tag))}><X size={14} /></button>
+                                        <button onClick={() => setCurrentHashtags(currentHashtags.filter(t => t !== tag))} className="text-gray-500 hover:text-gray-300">
+                                            <X size={14} />
+                                        </button>
                                     </motion.span>
                                 ))}
                             </AnimatePresence>
                         </div>
 
                         <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm text-purple-100">
-                                <Paperclip size={16} />
-                                <span>Прикрепить файлы</span>
-                            </div>
                             {newFiles.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
                                     {newFiles.map(file => (
-                                        <span key={file.name} className="flex items-center justify-between gap-2 bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-sm text-white w-full sm:w-auto">
-                                            {file.name}
-                                            <button onClick={() => removeNewFile(file.name)} className="text-red-200 hover:text-red-100">
+                                        <span key={file.name} className="flex items-center justify-between gap-2 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-gray-300">
+                                            <span className="truncate max-w-[200px]">{file.name}</span>
+                                            <button onClick={() => removeNewFile(file.name)} className="text-gray-500 hover:text-red-400 flex-shrink-0">
                                                 <X size={14} />
                                             </button>
                                         </span>
                                     ))}
                                 </div>
                             )}
-                            <input
-                                type="file"
-                                multiple
-                                onChange={handleNewFilesChange}
-                                className="text-sm text-white file:mr-3 file:rounded-md file:border-none file:bg-purple-600 file:px-3 file:py-1 file:text-white hover:file:bg-purple-700"
-                            />
+                            <div className="flex items-center gap-2">
+                                <label className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-400 cursor-pointer transition-colors">
+                                    <Paperclip size={16} />
+                                    <span>Прикрепить файл</span>
+                                    <input
+                                        type="file"
+                                        multiple
+                                        onChange={handleNewFilesChange}
+                                        className="hidden"
+                                    />
+                                </label>
+                            </div>
                         </div>
 
                         {searchText && !editingId && (
                             <motion.button
                                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                                 onClick={addNote}
-                                className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-2xl font-medium shadow-lg"
+                                className="w-full bg-gray-100 hover:bg-white text-gray-900 py-3.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-colors text-base min-h-[52px]"
                             >
                                 Добавить заметку
                             </motion.button>

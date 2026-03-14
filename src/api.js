@@ -1,4 +1,4 @@
-const api = 'http://localhost:3001';
+const api = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 const getHeaders = () => ({
     'Content-Type': 'application/json',
