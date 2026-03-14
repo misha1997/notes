@@ -1,3 +1,5 @@
+const api = 'http://localhost:3001';
+
 const getHeaders = () => ({
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -21,7 +23,7 @@ export const noteService = {
     // Получить все заметки
     async getAll({ offset = 0, limit = 25 } = {}) {
         const res = handleForbidden(
-            await fetch(`/api/notes?offset=${offset}&limit=${limit}`, { headers: getHeaders() })
+            await fetch(`${api}/api/notes?offset=${offset}&limit=${limit}`, { headers: getHeaders() })
         );
         if (!res.ok) return { notes: [], hasMore: false };
         const data = await res.json();
@@ -32,7 +34,7 @@ export const noteService = {
     },
     // Создать заметку
     async create(noteData) {
-        const res = handleForbidden(await fetch(`/api/notes`, {
+        const res = handleForbidden(await fetch(`${api}/api/notes`, {
             method: 'POST',
             headers: getHeaders(),
             body: JSON.stringify(noteData)
@@ -40,7 +42,7 @@ export const noteService = {
         return res.json();
     },
     async reorder(noteIds) {
-        handleForbidden(await fetch(`/api/notes/reorder`, {
+        handleForbidden(await fetch(`${api}/api/notes/reorder`, {
             method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify({ noteIds })
@@ -48,7 +50,7 @@ export const noteService = {
     },
     // Обновить заметку
     async update(id, noteData) {
-        const res = handleForbidden(await fetch(`/api/notes/${id}`, {
+        const res = handleForbidden(await fetch(`${api}/api/notes/${id}`, {
             method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify(noteData)
@@ -58,7 +60,7 @@ export const noteService = {
     async uploadAttachment(id, file) {
         const formData = new FormData();
         formData.append('file', file);
-        const res = handleForbidden(await fetch(`/api/notes/${id}/attachments`, {
+        const res = handleForbidden(await fetch(`${api}/api/notes/${id}/attachments`, {
             method: 'POST',
             headers: getAuthHeader(),
             body: formData
@@ -67,14 +69,14 @@ export const noteService = {
         return res.json();
     },
     async deleteAttachment(noteId, attachmentId) {
-        handleForbidden(await fetch(`/api/notes/${noteId}/attachments/${attachmentId}`, {
+        handleForbidden(await fetch(`${api}/api/notes/${noteId}/attachments/${attachmentId}`, {
             method: 'DELETE',
             headers: getAuthHeader()
         }));
     },
     // Удалить заметку
     async delete(id) {
-        handleForbidden(await fetch(`/api/notes/${id}`, {
+        handleForbidden(await fetch(`${api}/api/notes/${id}`, {
             method: 'DELETE',
             headers: getHeaders()
         }));
@@ -83,7 +85,7 @@ export const noteService = {
 
 export const authService = {
     async login(login, password) {
-        const res = await fetch(`/api/auth/login`, {
+        const res = await fetch(`${api}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ login, password })
@@ -93,7 +95,7 @@ export const authService = {
         return data;
     },
     async telegramLogin(telegramData) {
-        const res = await fetch(`/api/auth/telegram`, {
+        const res = await fetch(`${api}/api/auth/telegram`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ telegramData })

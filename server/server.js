@@ -9,6 +9,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 require('dotenv').config();
 
+const api = 'http://localhost:3001';
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -158,7 +160,7 @@ function verifyTelegramData(data) {
 
 // --- AUTH ---
 
-app.post('/api/auth/register', async (req, res) => {
+app.post(api + '/api/auth/register', async (req, res) => {
     try {
         const { username, email, password } = req.body;
         const hash = await bcrypt.hash(password, SALT_ROUNDS);
@@ -173,7 +175,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post(api + '/api/auth/login', async (req, res) => {
     const { login, password } = req.body;
     const [users] = await pool.query('SELECT * FROM users WHERE username = ? OR email = ?', [login, login]);
     const user = users[0];
@@ -186,7 +188,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-app.post('/api/auth/telegram', async (req, res) => {
+app.post(api + '/api/auth/telegram', async (req, res) => {
     try {
         if (!TELEGRAM_BOT_TOKEN) {
             return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN не задан' });
@@ -251,7 +253,7 @@ app.post('/api/auth/telegram', async (req, res) => {
 
 // --- NOTES ---
 
-app.get('/api/notes', authenticateToken, async (req, res) => {
+app.get(api + '/api/notes', authenticateToken, async (req, res) => {
     try {
         const limitValue = Number.parseInt(req.query.limit, 10);
         const offsetValue = Number.parseInt(req.query.offset, 10);
@@ -308,7 +310,7 @@ app.get('/api/notes', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/notes', authenticateToken, async (req, res) => {
+app.post(api + '/api/notes', authenticateToken, async (req, res) => {
     const { content, type, hashtags } = req.body;
     const conn = await pool.getConnection();
     try {
@@ -330,7 +332,7 @@ app.post('/api/notes', authenticateToken, async (req, res) => {
     }
 });
 
-app.put('/api/notes/reorder', authenticateToken, async (req, res) => {
+app.put(api + '/api/notes/reorder', authenticateToken, async (req, res) => {
     const { noteIds } = req.body;
     const conn = await pool.getConnection();
     try {
@@ -352,7 +354,7 @@ app.put('/api/notes/reorder', authenticateToken, async (req, res) => {
     }
 });
 
-app.put('/api/notes/:id', authenticateToken, async (req, res) => {
+app.put(api + '/api/notes/:id', authenticateToken, async (req, res) => {
     const { content, type, hashtags } = req.body;
     const conn = await pool.getConnection();
     try {
@@ -374,7 +376,7 @@ app.put('/api/notes/:id', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/notes/:id/attachments', authenticateToken, upload.single('file'), async (req, res) => {
+app.post(api + '/api/notes/:id/attachments', authenticateToken, upload.single('file'), async (req, res) => {
     const noteId = req.params.id;
     if (!req.file) {
         return res.status(400).json({ error: 'Файл не найден' });
@@ -407,7 +409,7 @@ app.post('/api/notes/:id/attachments', authenticateToken, upload.single('file'),
     res.status(201).json(attachment);
 });
 
-app.delete('/api/notes/:noteId/attachments/:attachmentId', authenticateToken, async (req, res) => {
+app.delete(api + '/api/notes/:noteId/attachments/:attachmentId', authenticateToken, async (req, res) => {
     const { noteId, attachmentId } = req.params;
     const [rows] = await pool.query(`
     SELECT a.* FROM attachments a
@@ -424,7 +426,7 @@ app.delete('/api/notes/:noteId/attachments/:attachmentId', authenticateToken, as
     res.json({ message: 'Вложение удалено' });
 });
 
-app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
+app.delete(api + '/api/notes/:id', authenticateToken, async (req, res) => {
     await pool.query('UPDATE notes SET deleted_at = NOW() WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [req.params.id, req.user.id]);
     await pool.query('UPDATE attachments SET deleted_at = NOW() WHERE note_id = ? AND deleted_at IS NULL', [req.params.id]);
     res.json({ message: 'Удалено' });
