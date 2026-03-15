@@ -145,19 +145,6 @@ function authenticateToken(req, res, next) {
     });
 }
 
-function verifyTelegramData(data) {
-    if (!TELEGRAM_BOT_TOKEN) return null;
-    const { hash, ...rest } = data;
-    const secretKey = crypto.createHash('sha256').update(TELEGRAM_BOT_TOKEN).digest();
-    const dataCheckString = Object.keys(rest)
-        .sort()
-        .map(key => `${key}=${rest[key]}`)
-        .join('\n');
-    const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-    if (hmac === hash) return rest;
-    return null;
-}
-
 // --- AUTH ---
 
 app.post('/api/auth/register', async (req, res) => {
@@ -188,66 +175,64 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-app.post('/api/auth/telegram', async (req, res) => {
+// Google OAuth
+app.post('/api/auth/google', async (req, res) => {
     try {
-        if (!TELEGRAM_BOT_TOKEN) {
-            return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN не задан' });
+        const { token } = req.body;
+        if (!token) return res.status(400).json({ error: 'Нет токена Google' });
+
+        // Проверяем токен через Google API
+        const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${token}`);
+        if (!response.ok) {
+            return res.status(401).json({ error: 'Невалидный токен Google' });
         }
 
-        const telegramData = req.body.telegramData;
-        if (!telegramData) return res.status(400).json({ error: 'Нет данных Telegram' });
+        const googleData = await response.json();
 
-        const verified = verifyTelegramData(telegramData);
-        if (!verified) return res.status(403).json({ error: 'Подпись Telegram невалидна' });
-
-        const tgId = verified.id;
-        const tgUsername = verified.username || `tg_${tgId}`;
-        const tgEmail = `${tgId}@telegram.local`;
-        const randomPass = crypto.randomBytes(16).toString('hex');
-        const randomHash = await bcrypt.hash(randomPass, SALT_ROUNDS);
-
-        const conn = await pool.getConnection();
-        try {
-            await conn.beginTransaction();
-
-            const [existing] = await conn.query('SELECT * FROM users WHERE telegram_id = ?', [tgId]);
-            let userRow = existing[0];
-
-            if (!userRow) {
-                // Пытаемся занять уникальный username
-                let finalUsername = tgUsername;
-                let suffix = 1;
-                while (true) {
-                    const [check] = await conn.query('SELECT id FROM users WHERE username = ?', [finalUsername]);
-                    if (check.length === 0) break;
-                    finalUsername = `${tgUsername}_${suffix}`;
-                    suffix += 1;
-                }
-
-                const [result] = await conn.query(
-                    'INSERT INTO users (username, email, password_hash, telegram_id, telegram_username) VALUES (?, ?, ?, ?, ?)',
-                    [finalUsername, tgEmail, randomHash, tgId, tgUsername]
-                );
-
-                userRow = {
-                    id: result.insertId,
-                    username: finalUsername,
-                    email: tgEmail
-                };
+        // Проверяем client_id если задан в env
+        const googleClientId = process.env.GOOGLE_CLIENT_ID;
+        if (googleClientId && googleClientId !== 'your_google_client_id.apps.googleusercontent.com') {
+            if (googleData.aud !== googleClientId) {
+                return res.status(401).json({ error: 'Неверный client_id' });
             }
-
-            await conn.commit();
-
-            const token = jwt.sign({ id: userRow.id, username: userRow.username }, JWT_SECRET, { expiresIn: '7d' });
-            res.json({ token, user: { id: userRow.id, username: userRow.username, email: userRow.email } });
-        } catch (err) {
-            await conn.rollback();
-            res.status(500).json({ error: err.message });
-        } finally {
-            conn.release();
         }
+
+        // Проверяем что email подтвержден
+        if (!googleData.email_verified) {
+            return res.status(401).json({ error: 'Email не подтвержден' });
+        }
+
+        const email = googleData.email;
+        const name = googleData.name || email.split('@')[0];
+
+        // Ищем или создаем пользователя
+        const [existing] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+        let user = existing[0];
+
+        if (!user) {
+            // Создаем нового пользователя
+            const username = name.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now().toString().slice(-4);
+            const randomPass = crypto.randomBytes(16).toString('hex');
+            const passwordHash = await bcrypt.hash(randomPass, SALT_ROUNDS);
+
+            const [result] = await pool.query(
+                'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
+                [username, email, passwordHash]
+            );
+
+            user = {
+                id: result.insertId,
+                username,
+                email
+            };
+        }
+
+        // Генерируем JWT
+        const jwtToken = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({ token: jwtToken, user: { id: user.id, username: user.username, email: user.email } });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Google auth error:', err);
+        res.status(500).json({ error: 'Ошибка при авторизации через Google' });
     }
 });
 

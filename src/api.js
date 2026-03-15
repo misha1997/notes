@@ -20,7 +20,6 @@ const handleForbidden = (res) => {
 };
 
 export const noteService = {
-    // Получить все заметки
     async getAll({ offset = 0, limit = 25 } = {}) {
         const res = handleForbidden(
             await fetch(`${api}/api/notes?offset=${offset}&limit=${limit}`, { headers: getHeaders() })
@@ -32,7 +31,7 @@ export const noteService = {
         }
         return data;
     },
-    // Создать заметку
+
     async create(noteData) {
         const res = handleForbidden(await fetch(`${api}/api/notes`, {
             method: 'POST',
@@ -41,6 +40,7 @@ export const noteService = {
         }));
         return res.json();
     },
+
     async reorder(noteIds) {
         handleForbidden(await fetch(`${api}/api/notes/reorder`, {
             method: 'PUT',
@@ -48,7 +48,7 @@ export const noteService = {
             body: JSON.stringify({ noteIds })
         }));
     },
-    // Обновить заметку
+
     async update(id, noteData) {
         const res = handleForbidden(await fetch(`${api}/api/notes/${id}`, {
             method: 'PUT',
@@ -57,6 +57,7 @@ export const noteService = {
         }));
         return res.json();
     },
+
     async uploadAttachment(id, file) {
         const formData = new FormData();
         formData.append('file', file);
@@ -68,13 +69,14 @@ export const noteService = {
         if (!res.ok) throw new Error('Upload failed');
         return res.json();
     },
+
     async deleteAttachment(noteId, attachmentId) {
         handleForbidden(await fetch(`${api}/api/notes/${noteId}/attachments/${attachmentId}`, {
             method: 'DELETE',
             headers: getAuthHeader()
         }));
     },
-    // Удалить заметку
+
     async delete(id) {
         handleForbidden(await fetch(`${api}/api/notes/${id}`, {
             method: 'DELETE',
@@ -94,16 +96,18 @@ export const authService = {
         if (data.token) localStorage.setItem('token', data.token);
         return data;
     },
-    async telegramLogin(telegramData) {
-        const res = await fetch(`${api}/api/auth/telegram`, {
+
+    async googleLogin(googleToken) {
+        const res = await fetch(`${api}/api/auth/google`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ telegramData })
+            body: JSON.stringify({ token: googleToken })
         });
         const data = await res.json();
         if (data.token) localStorage.setItem('token', data.token);
         return data;
     },
+
     logout() {
         localStorage.removeItem('token');
     }

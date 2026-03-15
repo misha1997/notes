@@ -2,6 +2,8 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -13,59 +15,145 @@ html {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #0f0f0f;
-  color: #e5e5e5;
+  background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%);
+  background-attachment: fixed;
+  color: #f8fafc;
   min-height: 100vh;
 }
 
-/* Строгий темный скроллбар */
+/* Скроллбар */
 .scrollbar-styled {
   scrollbar-width: thin;
-  scrollbar-color: #404040 #1a1a1a;
+  scrollbar-color: #06b6d4 #0f172a;
 }
 
 .scrollbar-styled::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 .scrollbar-styled::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 3px;
 }
 
 .scrollbar-styled::-webkit-scrollbar-thumb {
-  background: #404040;
-  border-radius: 4px;
+  background: linear-gradient(180deg, #06b6d4 0%, #3b82f6 100%);
+  border-radius: 3px;
 }
 
 .scrollbar-styled::-webkit-scrollbar-thumb:hover {
-  background: #525252;
+  background: linear-gradient(180deg, #22d3ee 0%, #60a5fa 100%);
 }
 
-/* Мобильные оптимизации */
-@media (max-width: 640px) {
-  html {
-    font-size: 15px;
-  }
-}
-
-/* Убираем outline при фокусе, но сохраняем доступность */
+/* Focus */
 *:focus-visible {
-  outline: 2px solid #404040;
+  outline: 2px solid #06b6d4;
   outline-offset: 2px;
 }
 
-/* Touch оптимизации */
 button, input, textarea, a {
   touch-action: manipulation;
 }
 
-/* Улучшенная читаемость текста */
 ::selection {
-  background-color: #404040;
+  background: linear-gradient(90deg, #06b6d4, #3b82f6);
   color: #ffffff;
+}
+
+/* Анимации */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(6, 182, 212, 0.5); }
+  50% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.8), 0 0 30px rgba(59, 130, 246, 0.4); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Стеклянный эффект */
+.glass {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Градиентный текст */
+.gradient-text {
+  background: linear-gradient(90deg, #22d3ee, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Неоновые эффекты */
+.neon-shadow {
+  box-shadow: 0 0 5px rgba(6, 182, 212, 0.3),
+              0 0 40px rgba(6, 182, 212, 0.1);
+}
+
+.neon-border {
+  border: 1px solid rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.2),
+              inset 0 0 10px rgba(6, 182, 212, 0.05);
+}
+
+/* Hover эффекты */
+.card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px -15px rgba(6, 182, 212, 0.3);
+}
+
+/* Градиентные кнопки */
+.btn-gradient {
+  background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #6366f1 100%);
+  background-size: 200% 200%;
+  transition: all 0.3s ease;
+}
+
+.btn-gradient:hover {
+  background-position: 100% 0;
+  box-shadow: 0 0 25px rgba(6, 182, 212, 0.5);
+  transform: translateY(-1px);
+}
+
+/* Разделители */
+.gradient-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.5), transparent);
+}
+
+/* Input glow */
+.input-glow:focus {
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.2), 0 0 20px rgba(6, 182, 212, 0.3);
 }

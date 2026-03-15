@@ -25,8 +25,8 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: data.error };
     };
 
-    const loginWithTelegram = async (telegramData) => {
-        const data = await authService.telegramLogin(telegramData);
+    const loginWithGoogle = async (googleToken) => {
+        const data = await authService.googleLogin(googleToken);
         if (data.token) {
             setUser(data.user);
             return { success: true };
@@ -55,7 +55,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, register, logout, loading, loginWithTelegram }}>
+        <AuthContext.Provider value={{ user, login, register, logout, loading, loginWithGoogle }}>
             {children}
         </AuthContext.Provider>
     );
