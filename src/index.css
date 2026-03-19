@@ -60,7 +60,7 @@ button, input, textarea, a {
 }
 
 ::selection {
-  background: linear-gradient(90deg, #06b6d4, #3b82f6);
+  background: rgba(34, 211, 238, 0.45);
   color: #ffffff;
 }
 
