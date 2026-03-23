@@ -5,6 +5,27 @@ import { noteService } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
+// Цветовые схемы для хештегов (градиенты)
+const TAG_COLORS = [
+    'from-cyan-500/30 to-blue-500/30 border-cyan-400/40 text-cyan-300',
+    'from-purple-500/30 to-pink-500/30 border-purple-400/40 text-purple-300',
+    'from-emerald-500/30 to-teal-500/30 border-emerald-400/40 text-emerald-300',
+    'from-amber-500/30 to-orange-500/30 border-amber-400/40 text-amber-300',
+    'from-rose-500/30 to-red-500/30 border-rose-400/40 text-rose-300',
+    'from-violet-500/30 to-indigo-500/30 border-violet-400/40 text-violet-300',
+    'from-sky-500/30 to-cyan-500/30 border-sky-400/40 text-sky-300',
+    'from-fuchsia-500/30 to-purple-500/30 border-fuchsia-400/40 text-fuchsia-300',
+];
+
+// Функция получения цвета для тега (псевдо-случайное на основе имени)
+const getTagColor = (tag) => {
+    let hash = 0;
+    for (let i = 0; i < tag.length; i++) {
+        hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
+};
+
 const urlRegex = /https?:\/\/[^\s]+/g;
 const apiBase = import.meta.env.VITE_API_URL || '';
 const apiOrigin = apiBase.replace(/\/api\/?$/, '');
@@ -63,6 +84,82 @@ const renderLinkedText = (text) =>
         return <span key={`text-${index}`}>{part.value}</span>;
     });
 
+// Компонент облака хештегов с подсказками
+const HashtagCloud = memo(function HashtagCloud({
+    availableTags,
+    currentTags,
+    inputValue,
+    onTagClick,
+    maxVisible = 3
+}) {
+    const filteredTags = useMemo(() => {
+        const input = inputValue.trim().toLowerCase();
+        if (!input) return []; // Не показываем, если нет ввода
+        return availableTags
+            .filter(tag => !currentTags.includes(tag))
+            .filter(tag => tag.toLowerCase().includes(input))
+            .slice(0, maxVisible);
+    }, [availableTags, currentTags, inputValue, maxVisible]);
+
+    if (filteredTags.length === 0) return null;
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-wrap gap-2 mt-2"
+        >
+            <AnimatePresence mode="popLayout">
+                {filteredTags.map((tag) => (
+                    <motion.button
+                        key={tag}
+                        layout
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.5, opacity: 0 }}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => onTagClick(tag)}
+                        className={`px-3 py-1.5 bg-gradient-to-r ${getTagColor(tag)} border rounded-full text-sm font-medium transition-all hover:shadow-lg hover:shadow-cyan-500/20 group`}
+                    >
+                        <span className="flex items-center gap-1.5">
+                            <Plus size={14} className="opacity-50 group-hover:opacity-100 transition-opacity" />
+                            {tag}
+                        </span>
+                    </motion.button>
+                ))}
+            </AnimatePresence>
+        </motion.div>
+    );
+});
+
+// Компонент отображения выбранных хештегов с цветами
+const SelectedHashtags = memo(function SelectedHashtags({ tags, onRemove }) {
+    return (
+        <AnimatePresence mode="popLayout">
+            {tags.map((tag) => (
+                <motion.span
+                    key={tag}
+                    layout
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.5, opacity: 0 }}
+                    whileHover={{ scale: 1.02 }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r ${getTagColor(tag)} border rounded-full text-sm`}
+                >
+                    {tag}
+                    <button
+                        onClick={() => onRemove(tag)}
+                        className="opacity-70 hover:opacity-100 hover:bg-white/10 rounded-full p-0.5 transition-all"
+                    >
+                        <X size={14} />
+                    </button>
+                </motion.span>
+            ))}
+        </AnimatePresence>
+    );
+});
+
 const DraggableNote = memo(forwardRef(function DraggableNote(
     {
         note,
@@ -87,7 +184,8 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
         newEditFiles,
         removeExistingAttachment,
         removeNewEditFile,
-        handleEditFilesChange
+        handleEditFilesChange,
+        uniqueHashtags
     },
     ref
 ) {
@@ -179,26 +277,35 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                             className={`w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:shadow-[0_0_20px_rgba(6,182,212,0.2)] min-h-[100px] max-h-[300px] resize-y overflow-y-auto scrollbar-styled transition-all ${editType === 'code' ? 'font-mono text-sm' : ''}`}
                         />
 
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <div className="relative">
-                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                                <input
-                                    type="text"
-                                    value={editHashtagInput}
-                                    onChange={(e) => setEditHashtagInput(e.target.value)}
-                                    onKeyPress={addHashtagEdit}
-                                    placeholder="Добавить тег..."
-                                    className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 transition-all"
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <div className="relative">
+                                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                    <input
+                                        type="text"
+                                        value={editHashtagInput}
+                                        onChange={(e) => setEditHashtagInput(e.target.value)}
+                                        onKeyPress={addHashtagEdit}
+                                        placeholder="Добавить тег..."
+                                        className="w-full pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-cyan-500/50 transition-all"
+                                    />
+                                </div>
+                                <SelectedHashtags
+                                    tags={editHashtags}
+                                    onRemove={(tag) => setEditHashtags(editHashtags.filter(t => t !== tag))}
                                 />
                             </div>
-                            {editHashtags.map((tag) => (
-                                <span key={tag} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-400/30 rounded-full text-sm text-cyan-300">
-                                    {tag}
-                                    <button onClick={() => setEditHashtags(editHashtags.filter(t => t !== tag))} className="text-cyan-400/70 hover:text-cyan-300">
-                                        <X size={14} />
-                                    </button>
-                                </span>
-                            ))}
+                            <HashtagCloud
+                                availableTags={uniqueHashtags}
+                                currentTags={editHashtags}
+                                inputValue={editHashtagInput}
+                                onTagClick={(tag) => {
+                                    if (!editHashtags.includes(tag)) {
+                                        setEditHashtags([...editHashtags, tag]);
+                                        setEditHashtagInput('');
+                                    }
+                                }}
+                            />
                         </div>
 
                         <div className="space-y-3">
@@ -299,9 +406,14 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                         {note.hashtags?.length > 0 ? (
                             <div className="flex flex-wrap gap-2 mt-4">
                                 {note.hashtags?.map(tag => (
-                                    <span key={tag} onClick={() => setSearchText(tag)} className="px-3 py-1 bg-slate-800/50 border border-cyan-500/20 rounded-full text-sm text-cyan-300 cursor-pointer hover:bg-cyan-500/10 hover:border-cyan-500/40 transition-all">
+                                    <motion.span
+                                        key={tag}
+                                        whileHover={{ scale: 1.05 }}
+                                        onClick={() => setSearchText(tag)}
+                                        className={`px-3 py-1 bg-gradient-to-r ${getTagColor(tag)} border rounded-full text-sm cursor-pointer transition-all hover:shadow-lg hover:shadow-cyan-500/10`}
+                                    >
                                         {tag}
-                                    </span>
+                                    </motion.span>
                                 ))}
                             </div>
                         ) : null}
@@ -747,34 +859,35 @@ export default function TodoNotesApp() {
                                 <Search className="absolute right-4 top-4 text-slate-600" size={20} />
                             </div>
 
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <div className="relative">
-                                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                                    <input
-                                        type="text"
-                                        value={hashtagInput}
-                                        onChange={(e) => setHashtagInput(e.target.value)}
-                                        onKeyPress={addHashtagMain}
-                                        placeholder="Добавить тег..."
-                                        className="w-full sm:w-auto pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all"
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="relative">
+                                        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                                        <input
+                                            type="text"
+                                            value={hashtagInput}
+                                            onChange={(e) => setHashtagInput(e.target.value)}
+                                            onKeyPress={addHashtagMain}
+                                            placeholder="Добавить тег..."
+                                            className="w-full sm:w-auto pl-10 pr-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all"
+                                        />
+                                    </div>
+                                    <SelectedHashtags
+                                        tags={currentHashtags}
+                                        onRemove={(tag) => setCurrentHashtags(currentHashtags.filter(t => t !== tag))}
                                     />
                                 </div>
-                                <AnimatePresence>
-                                    {currentHashtags.map((tag) => (
-                                        <motion.span
-                                            key={tag}
-                                            initial={{ scale: 0.8, opacity: 0 }}
-                                            animate={{ scale: 1, opacity: 1 }}
-                                            exit={{ scale: 0.8, opacity: 0 }}
-                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-400/30 rounded-full text-sm text-cyan-300"
-                                        >
-                                            {tag}
-                                            <button onClick={() => setCurrentHashtags(currentHashtags.filter(t => t !== tag))} className="text-cyan-400/70 hover:text-cyan-300">
-                                                <X size={14} />
-                                            </button>
-                                        </motion.span>
-                                    ))}
-                                </AnimatePresence>
+                                <HashtagCloud
+                                    availableTags={uniqueHashtags}
+                                    currentTags={currentHashtags}
+                                    inputValue={hashtagInput}
+                                    onTagClick={(tag) => {
+                                        if (!currentHashtags.includes(tag)) {
+                                            setCurrentHashtags([...currentHashtags, tag]);
+                                            setHashtagInput('');
+                                        }
+                                    }}
+                                />
                             </div>
 
                             {newFiles.length > 0 && (
@@ -848,6 +961,7 @@ export default function TodoNotesApp() {
                                             removeExistingAttachment={isEditing ? removeExistingAttachment : undefined}
                                             removeNewEditFile={isEditing ? removeNewEditFile : undefined}
                                             handleEditFilesChange={isEditing ? handleEditFilesChange : undefined}
+                                            uniqueHashtags={uniqueHashtags}
                                         />
                                     );
                                 })}
@@ -907,12 +1021,12 @@ export default function TodoNotesApp() {
                                             key={tag}
                                             initial={{ scale: 0.8, opacity: 0 }}
                                             animate={{ scale: 1, opacity: 1 }}
-                                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-cyan-500/20 border border-cyan-400/30 rounded-lg text-xs text-cyan-300"
+                                            className={`inline-flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r ${getTagColor(tag)} border rounded-lg text-xs`}
                                         >
                                             {tag}
                                             <button
                                                 onClick={() => toggleFilterTag(tag)}
-                                                className="hover:text-cyan-100 ml-0.5"
+                                                className="opacity-70 hover:opacity-100 hover:bg-white/10 rounded p-0.5 ml-0.5 transition-all"
                                             >
                                                 <X size={12} />
                                             </button>
@@ -936,19 +1050,19 @@ export default function TodoNotesApp() {
                                             <button
                                                 key={tag}
                                                 onClick={() => toggleFilterTag(tag)}
-                                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group ${
+                                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group border ${
                                                     isSelected
-                                                        ? 'bg-cyan-500/20 border border-cyan-400/40 text-cyan-300'
-                                                        : 'bg-slate-800/30 border border-transparent text-slate-400 hover:bg-slate-800/60 hover:border-slate-600'
+                                                        ? `bg-gradient-to-r ${getTagColor(tag)} shadow-lg shadow-cyan-500/10`
+                                                        : 'bg-slate-800/30 border-transparent text-slate-400 hover:bg-slate-800/60 hover:border-slate-600'
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-2 min-w-0">
-                                                    <Hash size={14} className={`shrink-0 ${isSelected ? 'text-cyan-400' : 'text-slate-500 group-hover:text-slate-400'}`} />
+                                                    <Hash size={14} className={`shrink-0 ${isSelected ? 'opacity-100' : 'text-slate-500 group-hover:text-slate-400'}`} />
                                                     <span className="truncate">{tag}</span>
                                                 </div>
                                                 <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${
                                                     isSelected
-                                                        ? 'bg-cyan-400/20 text-cyan-300'
+                                                        ? 'bg-white/20'
                                                         : 'bg-slate-700/50 text-slate-500'
                                                 }`}>
                                                     {count}
