@@ -1,5 +1,5 @@
-import React, { useState, useEffect, forwardRef, useRef, useCallback, useMemo, useDeferredValue, memo } from 'react';
-import { Search, Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download, Sparkles, Plus } from 'lucide-react';
+import React, { useState, useEffect, forwardRef, useRef, useCallback, useMemo, memo } from 'react';
+import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download, Sparkles, Plus, Check } from 'lucide-react';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
 import { noteService } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -84,6 +84,258 @@ const renderLinkedText = (text) =>
         return <span key={`text-${index}`}>{part.value}</span>;
     });
 
+// ============ RICH TEXT EDITOR COMPONENTS ============
+
+// Парсинг markdown для отображения
+const parseMarkdown = (text) => {
+    if (!text) return [{ type: 'text', content: '' }];
+
+    const parts = [];
+    let lastIndex = 0;
+
+    // Парсим code blocks ```...```
+    const codeBlockRegex = /```(\n?)([\s\S]*?)```/g;
+    const inlineCodeRegex = /`([^`]+)`/g;
+
+    // Сначала ищем code blocks
+    let match;
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+        // Добавляем текст до блока
+        if (match.index > lastIndex) {
+            const beforeText = text.slice(lastIndex, match.index);
+            // В тексте до блока ищем inline code
+            parts.push(...parseInlineCode(beforeText));
+        }
+        // Добавляем code block
+        parts.push({ type: 'code-block', content: match[2] });
+        lastIndex = match.index + match[0].length;
+    }
+
+    // Добавляем оставшийся текст
+    if (lastIndex < text.length) {
+        parts.push(...parseInlineCode(text.slice(lastIndex)));
+    }
+
+    return parts.length ? parts : [{ type: 'text', content: text }];
+};
+
+// Парсинг inline code `...`
+const parseInlineCode = (text) => {
+    const parts = [];
+    let lastIndex = 0;
+    const inlineCodeRegex = /`([^`]+)`/g;
+
+    let match;
+    while ((match = inlineCodeRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push({
+                type: 'text',
+                content: text.slice(lastIndex, match.index)
+            });
+        }
+        parts.push({ type: 'inline-code', content: match[1] });
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        parts.push({ type: 'text', content: text.slice(lastIndex) });
+    }
+
+    return parts.length ? parts : [{ type: 'text', content: text }];
+};
+
+// Компонент копируемого inline-кода
+const CopyableInlineCode = memo(function CopyableInlineCode({ content }) {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = useCallback(async () => {
+        try {
+            await navigator.clipboard.writeText(content);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        } catch (err) {
+            console.error('Не удалось скопировать', err);
+        }
+    }, [content]);
+
+    return (
+        <motion.code
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleCopy}
+            className={`px-2 py-0.5 rounded font-mono text-sm border cursor-pointer transition-colors select-none ${
+                copied
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    : 'bg-slate-800 text-cyan-300 border-cyan-500/20 hover:bg-slate-700 hover:border-cyan-400/40'
+            }`}
+            title="Кликните для копирования"
+        >
+            {content}
+        </motion.code>
+    );
+});
+
+// Компонент копируемого code block
+const CopyableCodeBlock = memo(function CopyableCodeBlock({ content }) {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = useCallback(async (e) => {
+        e.stopPropagation();
+        try {
+            await navigator.clipboard.writeText(content);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        } catch (err) {
+            console.error('Не удалось скопировать', err);
+        }
+    }, [content]);
+
+    return (
+        <div className="relative group">
+            <button
+                onClick={handleCopy}
+                className="absolute top-3 right-3 p-2 text-slate-500 hover:text-cyan-300 opacity-0 group-hover:opacity-100 transition-all"
+                title="Копировать код"
+            >
+                {copied ? <Check size={18} className="text-emerald-400" /> : <Copy size={18} />}
+            </button>
+            <pre className="text-cyan-100 whitespace-pre-wrap break-words font-mono text-sm bg-slate-950/80 p-4 rounded-xl border border-cyan-500/20 shadow-inner overflow-x-auto">
+                {content}
+            </pre>
+        </div>
+    );
+});
+
+// Компонент рендера markdown
+const MarkdownRenderer = memo(function MarkdownRenderer({ content, onTagClick }) {
+    const parts = parseMarkdown(content);
+
+    return (
+        <div className="space-y-2">
+            {parts.map((part, index) => {
+                if (part.type === 'code-block') {
+                    return (
+                        <CopyableCodeBlock key={index} content={part.content} />
+                    );
+                }
+                if (part.type === 'inline-code') {
+                    return (
+                        <CopyableInlineCode key={index} content={part.content} />
+                    );
+                }
+                // Обычный текст с ссылками
+                return (
+                    <span key={index} className="text-slate-200 whitespace-pre-wrap break-words leading-relaxed">
+                        {renderLinkedText(part.content)}
+                    </span>
+                );
+            })}
+        </div>
+    );
+});
+
+// Тулбар для форматирования
+const FormatToolbar = memo(function FormatToolbar({ textareaRef, onChange, content }) {
+    const wrapSelection = (before, after = before) => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = content.slice(start, end);
+
+        const newText = content.slice(0, start) + before + selectedText + after + content.slice(end);
+        onChange(newText);
+
+        setTimeout(() => {
+            textarea.focus();
+            const newCursorPos = start + before.length + selectedText.length;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+    };
+
+    const insertCodeBlock = () => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = content.slice(start, end);
+
+        const codeBlock = selectedText
+            ? `\`\`\`\n${selectedText}\n\`\`\``
+            : `\`\`\`\n\n\`\`\``;
+
+        const newText = content.slice(0, start) + codeBlock + content.slice(end);
+        onChange(newText);
+
+        setTimeout(() => {
+            textarea.focus();
+            const newCursorPos = selectedText
+                ? start + codeBlock.length
+                : start + 4;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+    };
+
+    return (
+        <div className="flex items-center gap-1.5">
+            <button
+                onClick={() => wrapSelection('`')}
+                className="flex items-center justify-center w-9 h-9 rounded-lg bg-slate-800/80 text-slate-400 hover:bg-cyan-500/20 hover:text-cyan-300 hover:border-cyan-500/30 border border-transparent transition-all"
+                title="Inline code"
+            >
+                <span className="font-mono text-sm font-bold">&lt;/&gt;</span>
+            </button>
+            <button
+                onClick={insertCodeBlock}
+                className="flex items-center justify-center w-9 h-9 rounded-lg bg-slate-800/80 text-slate-400 hover:bg-cyan-500/20 hover:text-cyan-300 hover:border-cyan-500/30 border border-transparent transition-all"
+                title="Code block"
+            >
+                <Code size={16} />
+            </button>
+        </div>
+    );
+});
+
+// Rich Text Editor компонент
+const RichTextEditor = memo(function RichTextEditor({ content, onChange, placeholder = "Введите текст..." }) {
+    const textareaRef = useRef(null);
+
+    const autoSize = useCallback(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${Math.min(el.scrollHeight, 400)}px`;
+    }, []);
+
+    useEffect(() => {
+        autoSize();
+    }, [content, autoSize]);
+
+    return (
+        <div className="relative bg-slate-900/50 rounded-xl border border-slate-700 focus-within:border-cyan-500/50 focus-within:shadow-[0_0_20px_rgba(6,182,212,0.15)] transition-all overflow-hidden">
+            {/* Тулбар */}
+            <div className="flex items-center px-3 py-2 bg-slate-800/50 border-b border-slate-700/50">
+                <FormatToolbar textareaRef={textareaRef} onChange={onChange} content={content} />
+            </div>
+
+            {/* Поле ввода */}
+            <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={(e) => onChange(e.target.value)}
+                onInput={autoSize}
+                rows={3}
+                placeholder={placeholder}
+                className="w-full px-4 py-3 bg-transparent text-slate-100 placeholder-slate-600 focus:outline-none resize-y overflow-y-auto scrollbar-styled min-h-[100px]"
+            />
+        </div>
+    );
+});
+
+// ============ END RICH TEXT EDITOR ============
+
 // Компонент облака хештегов с подсказками
 const HashtagCloud = memo(function HashtagCloud({
     availableTags,
@@ -164,11 +416,9 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
     {
         note,
         isEditing,
-        editType,
         editContent,
         editHashtags,
         editHashtagInput,
-        setEditType,
         setEditContent,
         setEditHashtags,
         setEditHashtagInput,
@@ -178,7 +428,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
         formatDate,
         setEditingId,
         addHashtagEdit,
-        setSearchText,
+        toggleFilterTag,
         formatFileSize,
         editAttachments,
         newEditFiles,
@@ -191,40 +441,25 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
 ) {
     const dragControls = useDragControls();
     const [copied, setCopied] = useState(false);
-    const editAreaRef = useRef(null);
-
-    const autoSizeEdit = useCallback(() => {
-        const el = editAreaRef.current;
-        if (!el) return;
-        el.style.height = 'auto';
-        el.style.height = `${Math.min(el.scrollHeight, 400)}px`;
-    }, []);
-
-    useEffect(() => {
-        if (isEditing) autoSizeEdit();
-    }, [isEditing, editContent, autoSizeEdit]);
 
     const handleCopy = useCallback(async () => {
+        const text = editContent || note.content;
         try {
-            await navigator.clipboard.writeText(note.content);
+            await navigator.clipboard.writeText(text);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
         } catch (err) {
             console.error('Не удалось скопировать текст', err);
         }
-    }, [note.content]);
+    }, [note, editContent]);
 
     const formattedDate = useMemo(() => formatDate(note.timestamp), [formatDate, note.timestamp]);
-    const renderedBody = useMemo(() => {
-        if (note.type === 'code') {
-            return (
-                <pre className="text-cyan-100 whitespace-pre-wrap break-words font-mono text-sm bg-slate-950/80 p-4 rounded-xl border border-cyan-500/20 shadow-inner overflow-x-auto">
-                    {note.content}
-                </pre>
-            );
-        }
-        return <div className="text-slate-200 whitespace-pre-wrap break-words leading-relaxed">{renderLinkedText(note.content)}</div>;
-    }, [note.type, note.content]);
+
+    // Проверяем есть ли код в заметке
+    const hasCode = useMemo(() => {
+        const content = isEditing ? editContent : note.content;
+        return content?.includes('```') || content?.includes('`');;
+    }, [isEditing, editContent, note.content]);
 
     return (
         <Reorder.Item
@@ -253,29 +488,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
 
                 {isEditing ? (
                     <div className="space-y-4 ml-8">
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setEditType('text')}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${editType === 'text' ? 'btn-gradient text-white' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:border-cyan-500/50'}`}
-                            >
-                                <FileText size={16} /> Текст
-                            </button>
-                            <button
-                                onClick={() => setEditType('code')}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${editType === 'code' ? 'btn-gradient text-white' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:border-cyan-500/50'}`}
-                            >
-                                <Code size={16} /> Код
-                            </button>
-                        </div>
-
-                        <textarea
-                            ref={editAreaRef}
-                            value={editContent}
-                            onChange={(e) => setEditContent(e.target.value)}
-                            onInput={autoSizeEdit}
-                            rows={1}
-                            className={`w-full p-4 bg-slate-900/80 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:shadow-[0_0_20px_rgba(6,182,212,0.2)] min-h-[100px] max-h-[300px] resize-y overflow-y-auto scrollbar-styled transition-all ${editType === 'code' ? 'font-mono text-sm' : ''}`}
-                        />
+                        <RichTextEditor content={editContent} onChange={setEditContent} />
 
                         <div className="space-y-2">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -366,8 +579,8 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                     <div className="ml-8">
                         <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-3">
-                                <div className={`p-2 rounded-lg ${note.type === 'code' ? 'bg-cyan-500/10 text-cyan-400' : 'bg-blue-500/10 text-blue-400'}`}>
-                                    {note.type === 'code' ? <Code size={16} /> : <FileText size={16} />}
+                                <div className={`p-2 rounded-lg ${hasCode ? 'bg-cyan-500/10 text-cyan-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                    {hasCode ? <Code size={16} /> : <FileText size={16} />}
                                 </div>
                                 <span className="text-xs text-slate-500 font-medium">{formattedDate}</span>
                             </div>
@@ -384,15 +597,13 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                         </motion.span>
                                     )}
                                 </AnimatePresence>
-                                {note.type === 'code' && (
-                                    <button
-                                        onClick={handleCopy}
-                                        className="p-2 hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-400 rounded-lg transition-colors"
-                                        title={copied ? "Скопировано" : "Скопировать код"}
-                                    >
-                                        <Copy size={18} />
-                                    </button>
-                                )}
+                                <button
+                                    onClick={handleCopy}
+                                    className="p-2 hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-400 rounded-lg transition-colors"
+                                    title="Скопировать"
+                                >
+                                    <Copy size={18} />
+                                </button>
                                 <button onClick={() => startEdit(note)} className="p-2 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 rounded-lg transition-colors" title="Редактировать">
                                     <Edit2 size={18} />
                                 </button>
@@ -401,7 +612,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                 </button>
                             </div>
                         </div>
-                        <div className="text-slate-200 leading-relaxed">{renderedBody}</div>
+                        <MarkdownRenderer content={note.content} />
 
                         {note.hashtags?.length > 0 ? (
                             <div className="flex flex-wrap gap-2 mt-4">
@@ -409,7 +620,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                     <motion.span
                                         key={tag}
                                         whileHover={{ scale: 1.05 }}
-                                        onClick={() => setSearchText(tag)}
+                                        onClick={() => toggleFilterTag(tag)}
                                         className={`px-3 py-1 bg-gradient-to-r ${getTagColor(tag)} border rounded-full text-sm cursor-pointer transition-all hover:shadow-lg hover:shadow-cyan-500/10`}
                                     >
                                         {tag}
@@ -457,21 +668,19 @@ export default function TodoNotesApp() {
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
-    const [searchText, setSearchText] = useState('');
-    const inputRef = useRef(null);
     const loadMoreRef = useRef(null);
     const pageSize = 25;
 
     const { logout, user } = useAuth();
     const navigate = useNavigate();
-    const deferredSearchText = useDeferredValue(searchText);
 
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
 
-    const [newNoteType, setNewNoteType] = useState('text');
+    // Содержимое новой заметки
+    const [newNoteContent, setNewNoteContent] = useState('');
     const [hashtagInput, setHashtagInput] = useState('');
     const [currentHashtags, setCurrentHashtags] = useState([]);
     const [newFiles, setNewFiles] = useState([]);
@@ -481,7 +690,6 @@ export default function TodoNotesApp() {
 
     const [editingId, setEditingId] = useState(null);
     const [editContent, setEditContent] = useState('');
-    const [editType, setEditType] = useState('text');
     const [editHashtags, setEditHashtags] = useState([]);
     const [editHashtagInput, setEditHashtagInput] = useState('');
     const [editAttachments, setEditAttachments] = useState([]);
@@ -528,17 +736,6 @@ export default function TodoNotesApp() {
         observer.observe(target);
         return () => observer.disconnect();
     }, [loadMore, hasMore]);
-
-    const autoSizeInput = () => {
-        const el = inputRef.current;
-        if (!el) return;
-        el.style.height = 'auto';
-        el.style.height = `${Math.min(el.scrollHeight, 320)}px`;
-    };
-
-    useEffect(() => {
-        autoSizeInput();
-    }, [searchText]);
 
     const addHashtagMain = (e) => {
         if (e.key === 'Enter' && hashtagInput.trim()) {
@@ -608,10 +805,9 @@ export default function TodoNotesApp() {
     };
 
     const addNote = async () => {
-        if (searchText.trim()) {
+        if (newNoteContent.trim()) {
             const newNoteData = {
-                content: searchText,
-                type: newNoteType,
+                content: newNoteContent,
                 hashtags: currentHashtags
             };
 
@@ -635,7 +831,7 @@ export default function TodoNotesApp() {
                 };
 
                 setNotes([noteToAdd, ...notes]);
-                setSearchText('');
+                setNewNoteContent('');
                 setCurrentHashtags([]);
                 setNewFiles([]);
             } catch (err) {
@@ -646,8 +842,7 @@ export default function TodoNotesApp() {
 
     const startEdit = useCallback((note) => {
         setEditingId(note.id);
-        setEditContent(note.content);
-        setEditType(note.type);
+        setEditContent(note.content || '');
         setEditHashtags(note.hashtags || []);
         setEditHashtagInput('');
         setEditAttachments(note.attachments || []);
@@ -658,7 +853,6 @@ export default function TodoNotesApp() {
     const saveEdit = async () => {
         const updatedData = {
             content: editContent,
-            type: editType,
             hashtags: editHashtags
         };
 
@@ -713,11 +907,11 @@ export default function TodoNotesApp() {
     const filteredNotes = useMemo(() => {
         let filtered = notes;
 
-        // Фильтр по поисковому запросу
-        const needle = deferredSearchText.trim().toLowerCase();
+        // Фильтр по тексту в поле ввода заметки (поиск)
+        const needle = newNoteContent.trim().toLowerCase();
         if (needle) {
             filtered = filtered.filter(note => {
-                const matchesText = note.content.toLowerCase().includes(needle);
+                const matchesText = note.content?.toLowerCase().includes(needle);
                 const matchesHashtag = note.hashtags && note.hashtags.some(tag =>
                     tag.toLowerCase().includes(needle)
                 );
@@ -735,7 +929,7 @@ export default function TodoNotesApp() {
         }
 
         return filtered;
-    }, [notes, deferredSearchText, selectedFilterTags]);
+    }, [notes, newNoteContent, selectedFilterTags]);
 
     const toggleFilterTag = (tag) => {
         setSelectedFilterTags(prev =>
@@ -825,39 +1019,7 @@ export default function TodoNotesApp() {
 
                         {/* Create Note Form */}
                         <div className="space-y-4 mb-8">
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setNewNoteType('text')}
-                                    className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all ${newNoteType === 'text' ? 'btn-gradient text-white' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:border-cyan-500/30'}`}
-                                >
-                                    <FileText size={18} /> Текст
-                                </button>
-                                <button
-                                    onClick={() => setNewNoteType('code')}
-                                    className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all ${newNoteType === 'code' ? 'btn-gradient text-white' : 'bg-slate-800/50 text-slate-400 border border-slate-700 hover:border-cyan-500/30'}`}
-                                >
-                                    <Code size={18} /> Код
-                                </button>
-                            </div>
-
-                            <div className="relative group">
-                                <textarea
-                                    ref={inputRef}
-                                    value={searchText}
-                                    onChange={(e) => setSearchText(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && e.ctrlKey && !editingId) {
-                                            e.preventDefault();
-                                            addNote();
-                                        }
-                                    }}
-                                    onInput={autoSizeInput}
-                                    rows={1}
-                                    placeholder="Введите текст заметки... (Ctrl + Enter — добавить)"
-                                    className="w-full px-5 py-4 bg-slate-900/50 border border-slate-700 rounded-2xl text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:shadow-[0_0_30px_rgba(6,182,212,0.15)] min-h-[60px] max-h-[240px] resize-y overflow-y-auto scrollbar-styled text-base transition-all"
-                                />
-                                <Search className="absolute right-4 top-4 text-slate-600" size={20} />
-                            </div>
+                            <RichTextEditor content={newNoteContent} onChange={setNewNoteContent} />
 
                             <div className="space-y-2">
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -917,7 +1079,7 @@ export default function TodoNotesApp() {
                                 </label>
                             </div>
 
-                            {searchText && !editingId && (
+                            {newNoteContent.trim() && !editingId && (
                                 <motion.button
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -940,11 +1102,9 @@ export default function TodoNotesApp() {
                                             key={note.id}
                                             note={note}
                                             isEditing={isEditing}
-                                            editType={isEditing ? editType : 'text'}
                                             editContent={isEditing ? editContent : ''}
                                             editHashtags={isEditing ? editHashtags : EMPTY_ARRAY}
                                             editHashtagInput={isEditing ? editHashtagInput : ''}
-                                            setEditType={setEditType}
                                             setEditContent={setEditContent}
                                             setEditHashtags={setEditHashtags}
                                             setEditHashtagInput={setEditHashtagInput}
@@ -954,7 +1114,7 @@ export default function TodoNotesApp() {
                                             formatDate={formatDate}
                                             setEditingId={setEditingId}
                                             addHashtagEdit={isEditing ? addHashtagEdit : undefined}
-                                            setSearchText={setSearchText}
+                                            toggleFilterTag={toggleFilterTag}
                                             formatFileSize={formatFileSize}
                                             editAttachments={isEditing ? editAttachments : EMPTY_ARRAY}
                                             newEditFiles={isEditing ? newEditFiles : EMPTY_ARRAY}

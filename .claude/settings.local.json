@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm run:*)",
       "Bash(npm start:*)",
-      "Bash(node -c src/components/TodoNotesApp.jsx 2>&1 || echo \"Syntax check failed\")"
+      "Bash(node -c src/components/TodoNotesApp.jsx 2>&1 || echo \"Syntax check failed\")",
+      "Bash(npx eslint:*)"
     ]
   }
 }
