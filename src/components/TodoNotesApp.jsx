@@ -191,7 +191,7 @@ const CopyableCodeBlock = memo(function CopyableCodeBlock({ content }) {
     }, [content]);
 
     return (
-        <div className="relative group">
+        <div className="relative group my-1">
             <button
                 onClick={handleCopy}
                 className="absolute top-3 right-3 p-2 text-slate-500 hover:text-cyan-300 opacity-0 group-hover:opacity-100 transition-all"
@@ -199,7 +199,7 @@ const CopyableCodeBlock = memo(function CopyableCodeBlock({ content }) {
             >
                 {copied ? <Check size={18} className="text-emerald-400" /> : <Copy size={18} />}
             </button>
-            <pre className="text-cyan-100 whitespace-pre-wrap break-words font-mono text-sm bg-slate-950/80 p-4 rounded-xl border border-cyan-500/20 shadow-inner overflow-x-auto">
+            <pre className="text-cyan-100 whitespace-pre-wrap break-words font-mono text-sm bg-slate-950/80 p-4 m-0 rounded-xl border border-cyan-500/20 shadow-inner overflow-x-auto">
                 {content}
             </pre>
         </div>
@@ -210,9 +210,12 @@ const CopyableCodeBlock = memo(function CopyableCodeBlock({ content }) {
 const MarkdownRenderer = memo(function MarkdownRenderer({ content, onTagClick }) {
     const parts = parseMarkdown(content);
 
+    // Фильтруем пустые части
+    const filteredParts = parts.filter(part => part.content.trim() !== '');
+
     return (
-        <div className="space-y-2">
-            {parts.map((part, index) => {
+        <div className="flex flex-col gap-1">
+            {filteredParts.map((part, index) => {
                 if (part.type === 'code-block') {
                     return (
                         <CopyableCodeBlock key={index} content={part.content} />
@@ -225,7 +228,7 @@ const MarkdownRenderer = memo(function MarkdownRenderer({ content, onTagClick })
                 }
                 // Обычный текст с ссылками
                 return (
-                    <span key={index} className="text-slate-200 whitespace-pre-wrap break-words leading-relaxed">
+                    <span key={index} className="text-slate-200 break-words leading-relaxed">
                         {renderLinkedText(part.content)}
                     </span>
                 );
