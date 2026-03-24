@@ -1177,7 +1177,6 @@ export default function TodoNotesApp() {
                         {/* Selected Tags Display */}
                         {selectedFilterTags.length > 0 && (
                             <div className="mb-4 p-3 bg-cyan-500/5 rounded-xl border border-cyan-500/20">
-                                <p className="text-xs text-slate-500 mb-2">Активные фильтры:</p>
                                 <div className="flex flex-wrap gap-1.5">
                                     {selectedFilterTags.map(tag => (
                                         <motion.span
