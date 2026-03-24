@@ -228,7 +228,7 @@ const MarkdownRenderer = memo(function MarkdownRenderer({ content, onTagClick })
                 }
                 // Обычный текст с ссылками
                 return (
-                    <span key={index} className="text-slate-200 break-words leading-relaxed">
+                    <span key={index} className="text-slate-200 break-words leading-relaxed whitespace-pre-wrap">
                         {renderLinkedText(part.content)}
                     </span>
                 );
