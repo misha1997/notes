@@ -4,7 +4,12 @@
       "Bash(npm run:*)",
       "Bash(npm start:*)",
       "Bash(node -c src/components/TodoNotesApp.jsx 2>&1 || echo \"Syntax check failed\")",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(npm install:*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :3001)",
+      "Bash(taskkill:*)",
+      "Bash(npx kill-port:*)"
     ]
   }
 }
