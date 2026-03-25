@@ -27,8 +27,13 @@ export default function Register() {
             setError('Все поля обязательны для заполнения');
             return false;
         }
-        if (formData.username.length < 3) {
-            setError('Имя пользователя должно быть не менее 3 символов');
+        if (formData.username.length < 3 || formData.username.length > 30) {
+            setError('Имя пользователя: 3-30 символов');
+            return false;
+        }
+        const usernameRegex = /^[a-zA-Z0-9_]+$/;
+        if (!usernameRegex.test(formData.username)) {
+            setError('Имя пользователя может содержать только буквы, цифры и подчёркивание');
             return false;
         }
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -36,8 +41,14 @@ export default function Register() {
             setError('Введите корректный адрес электронной почты');
             return false;
         }
-        if (formData.password.length < 6) {
-            setError('Пароль должен содержать минимум 6 символов');
+        // Пароль: минимум 8 символов, хотя бы одна буква и одна цифра
+        if (formData.password.length < 8) {
+            setError('Пароль должен содержать минимум 8 символов');
+            return false;
+        }
+        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$/;
+        if (!passwordRegex.test(formData.password)) {
+            setError('Пароль должен содержать минимум одну букву и одну цифру');
             return false;
         }
         if (formData.password !== formData.confirmPassword) {

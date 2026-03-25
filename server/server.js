@@ -7,6 +7,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 require('dotenv').config();
 
 const api = 'http://localhost:3001';
@@ -17,9 +19,68 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const SALT_ROUNDS = 10;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-app.use(cors());
+// Validate required environment variables
+if (!JWT_SECRET) {
+    console.error('ERROR: JWT_SECRET is not set in environment variables');
+    process.exit(1);
+}
+
+if (JWT_SECRET.length < 32) {
+    console.error('ERROR: JWT_SECRET should be at least 32 characters long');
+    process.exit(1);
+}
+
+// Security middleware
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            imgSrc: ["'self'", "data:", "blob:"],
+            connectSrc: ["'self'", process.env.REACT_APP_API_URL || "http://localhost:3001"],
+        },
+    },
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+    }
+}));
+
+// Rate limiting
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 минут
+    max: 5, // 5 попыток
+    message: { error: 'Слишком много попыток, попробуйте позже' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 минута
+    max: 100, // 100 запросов в минуту
+    message: { error: 'Превышен лимит запросов' },
+});
+
+const uploadLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10, // 10 загрузок файлов в минуту
+    message: { error: 'Слишком много загрузок файлов' },
+});
+
+app.use(cors({
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    credentials: true
+}));
+
 app.set('trust proxy', 1);
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+
+// Apply rate limiting
+app.use('/api/auth/', authLimiter);
+app.use('/api/', apiLimiter);
+app.use('/api/notes/:id/attachments', uploadLimiter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/download/:filename', (req, res) => {
     const filename = path.basename(req.params.filename);
@@ -46,7 +107,35 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } }); // 10 MB limit
+// File type whitelist
+const ALLOWED_MIME_TYPES = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+    'text/plain', 'text/markdown', 'text/csv',
+    'application/pdf', 'application/json',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
+    'application/zip', 'application/x-zip-compressed',
+    'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm',
+    'video/mp4', 'video/webm', 'video/ogg'
+];
+
+const ALLOWED_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|txt|md|csv|pdf|json|docx|xlsx|pptx|zip|mp3|wav|ogg|webm|mp4)$/i;
+
+const fileFilter = (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype) && ALLOWED_EXTENSIONS.test(ext)) {
+        cb(null, true);
+    } else {
+        cb(new Error('Недопустимый тип файла'), false);
+    }
+};
+
+const upload = multer({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+    fileFilter
+});
 
 const pool = mysql.createPool({
     host: process.env.DB_HOST,
@@ -135,21 +224,77 @@ async function initDatabase() {
 
 // Middleware защиты роутов
 function authenticateToken(req, res, next) {
-    const token = req.headers['authorization']?.split(' ')[1];
-    if (!token) return res.status(401).json({ error: 'Доступ запрещен' });
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Доступ запрещен' });
+    }
 
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.status(403).json({ error: 'Токен невалиден' });
+    const token = authHeader.split(' ')[1];
+    if (!token || token.split('.').length !== 3) {
+        return res.status(401).json({ error: 'Невалидный формат токена' });
+    }
+
+    jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }, (err, user) => {
+        if (err) {
+            if (err.name === 'TokenExpiredError') {
+                return res.status(403).json({ error: 'Токен истёк' });
+            }
+            return res.status(403).json({ error: 'Токен невалиден' });
+        }
         req.user = user;
         next();
     });
 }
 
+// --- INPUT VALIDATION ---
+
+const validateEmail = (email) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email);
+};
+
+const validateUsername = (username) => {
+    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+    return usernameRegex.test(username);
+};
+
+const validatePassword = (password) => {
+    // Минимум 8 символов, хотя бы одна буква и одна цифра
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$/;
+    return passwordRegex.test(password);
+};
+
+const sanitizeInput = (input) => {
+    if (typeof input !== 'string') return '';
+    return input.trim().replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+};
+
 // --- AUTH ---
 
 app.post('/api/auth/register', async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        let { username, email, password } = req.body;
+
+        // Sanitize inputs
+        username = sanitizeInput(username);
+        email = sanitizeInput(email);
+
+        // Validation
+        if (!username || !email || !password) {
+            return res.status(400).json({ error: 'Все поля обязательны' });
+        }
+
+        if (!validateUsername(username)) {
+            return res.status(400).json({ error: 'Имя пользователя: 3-30 символов, только буквы, цифры и подчёркивание' });
+        }
+
+        if (!validateEmail(email)) {
+            return res.status(400).json({ error: 'Некорректный email' });
+        }
+
+        if (!validatePassword(password)) {
+            return res.status(400).json({ error: 'Пароль должен содержать минимум 8 символов, включая буквы и цифры' });
+        }
         const hash = await bcrypt.hash(password, SALT_ROUNDS);
         const [result] = await pool.query(
             'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
@@ -163,7 +308,20 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-    const { login, password } = req.body;
+    let { login, password } = req.body;
+
+    login = sanitizeInput(login);
+    password = sanitizeInput(password);
+
+    if (!login || !password) {
+        return res.status(400).json({ error: 'Введите логин и пароль' });
+    }
+
+    // Дополнительная защита от инъекций
+    if (login.length > 100 || password.length > 100) {
+        return res.status(400).json({ error: 'Слишком длинные данные' });
+    }
+
     const [users] = await pool.query('SELECT * FROM users WHERE username = ? OR email = ?', [login, login]);
     const user = users[0];
 
@@ -236,6 +394,95 @@ app.post('/api/auth/google', async (req, res) => {
     }
 });
 
+// --- USER ---
+
+// Получение данных пользователя
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
+    try {
+        const [users] = await pool.query(
+            'SELECT id, username, email, telegram_username, telegram_id FROM users WHERE id = ?',
+            [req.user.id]
+        );
+        if (users.length === 0) {
+            return res.status(404).json({ error: 'Пользователь не найден' });
+        }
+        res.json(users[0]);
+    } catch (err) {
+        console.error('Get user profile error:', err);
+        res.status(500).json({ error: 'Ошибка при получении профиля' });
+    }
+});
+
+// Обновление данных пользователя
+app.put('/api/user/profile', authenticateToken, async (req, res) => {
+    try {
+        let { email, currentPassword, newPassword } = req.body;
+        const userId = req.user.id;
+
+        // Sanitize
+        email = sanitizeInput(email);
+        if (currentPassword) currentPassword = sanitizeInput(currentPassword);
+        if (newPassword) newPassword = sanitizeInput(newPassword);
+
+        // Validate email if provided
+        if (email && !validateEmail(email)) {
+            return res.status(400).json({ error: 'Некорректный email' });
+        }
+
+        // Validate new password if provided
+        if (newPassword && !validatePassword(newPassword)) {
+            return res.status(400).json({ error: 'Новый пароль должен содержать минимум 8 символов, включая буквы и цифры' });
+        }
+
+        // Проверяем, существует ли пользователь
+        const [users] = await pool.query('SELECT * FROM users WHERE id = ?', [userId]);
+        if (users.length === 0) {
+            return res.status(404).json({ error: 'Пользователь не найден' });
+        }
+
+        const user = users[0];
+        const updates = [];
+        const values = [];
+
+        // Проверяем и обновляем пароль если передан
+        if (currentPassword && newPassword) {
+            const isPasswordValid = await bcrypt.compare(currentPassword, user.password_hash);
+            if (!isPasswordValid) {
+                return res.status(400).json({ error: 'Текущий пароль неверен' });
+            }
+            const newPasswordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+            updates.push('password_hash = ?');
+            values.push(newPasswordHash);
+        }
+
+        // Обновляем email если передан и отличается
+        if (email && email !== user.email) {
+            // Проверяем, не занят ли email другим пользователем
+            const [existingUsers] = await pool.query('SELECT id FROM users WHERE email = ? AND id != ?', [email, userId]);
+            if (existingUsers.length > 0) {
+                return res.status(400).json({ error: 'Этот email уже используется' });
+            }
+            updates.push('email = ?');
+            values.push(email);
+        }
+
+        if (updates.length > 0) {
+            values.push(userId);
+            await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
+        }
+
+        // Возвращаем обновленные данные
+        const [updatedUsers] = await pool.query(
+            'SELECT id, username, email FROM users WHERE id = ?',
+            [userId]
+        );
+        res.json(updatedUsers[0]);
+    } catch (err) {
+        console.error('Update user profile error:', err);
+        res.status(500).json({ error: 'Ошибка при обновлении профиля' });
+    }
+});
+
 // --- NOTES ---
 
 app.get('/api/notes', authenticateToken, async (req, res) => {
@@ -290,6 +537,19 @@ app.get('/api/notes', authenticateToken, async (req, res) => {
             attachments: attachmentsMap[n.id] || []
         }));
         res.json({ notes, hasMore });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Получение общего количества заметок пользователя
+app.get('/api/notes/count', authenticateToken, async (req, res) => {
+    try {
+        const [result] = await pool.query(
+            'SELECT COUNT(*) as count FROM notes WHERE user_id = ? AND deleted_at IS NULL',
+            [req.user.id]
+        );
+        res.json({ total: result[0].count });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -415,6 +675,32 @@ app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
     await pool.query('UPDATE notes SET deleted_at = NOW() WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [req.params.id, req.user.id]);
     await pool.query('UPDATE attachments SET deleted_at = NOW() WHERE note_id = ? AND deleted_at IS NULL', [req.params.id]);
     res.json({ message: 'Удалено' });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+
+    // Multer errors
+    if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ error: 'Файл слишком большой (макс. 10MB)' });
+        }
+        return res.status(400).json({ error: 'Ошибка загрузки файла' });
+    }
+
+    // File type error
+    if (err.message === 'Недопустимый тип файла') {
+        return res.status(400).json({ error: 'Недопустимый тип файла' });
+    }
+
+    // Generic error
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+});
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({ error: 'Not found' });
 });
 
 initDatabase().then(() => {

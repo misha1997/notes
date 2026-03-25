@@ -32,6 +32,14 @@ export const noteService = {
         return data;
     },
 
+    async getCount() {
+        const res = handleForbidden(
+            await fetch(`${api}/api/notes/count`, { headers: getHeaders() })
+        );
+        if (!res.ok) return { total: 0 };
+        return res.json();
+    },
+
     async create(noteData) {
         const res = handleForbidden(await fetch(`${api}/api/notes`, {
             method: 'POST',
@@ -82,6 +90,27 @@ export const noteService = {
             method: 'DELETE',
             headers: getHeaders()
         }));
+    }
+};
+
+export const userService = {
+    async getProfile() {
+        const res = handleForbidden(await fetch(`${api}/api/user/profile`, { headers: getHeaders() }));
+        if (!res.ok) throw new Error('Failed to load profile');
+        return res.json();
+    },
+
+    async updateProfile({ email, currentPassword, newPassword }) {
+        const res = handleForbidden(await fetch(`${api}/api/user/profile`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ email, currentPassword, newPassword })
+        }));
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || 'Failed to update profile');
+        }
+        return res.json();
     }
 };
 
