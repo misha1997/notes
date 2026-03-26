@@ -1,7 +1,7 @@
 import React, { useState, useEffect, forwardRef, useRef, useCallback, useMemo, memo } from 'react';
 import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download, Sparkles, Plus, Check, User } from 'lucide-react';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
-import { noteService, userService } from '../api';
+import { noteService, userService, tagService } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -713,6 +713,9 @@ export default function TodoNotesApp() {
     // Фильтрация по хештегам
     const [selectedFilterTags, setSelectedFilterTags] = useState([]);
 
+    // Счетчики кликов по хештегам (для сортировки по популярности)
+    const [tagClickCounts, setTagClickCounts] = useState({});
+
     const [editingId, setEditingId] = useState(null);
     const [editContent, setEditContent] = useState('');
     const [editHashtags, setEditHashtags] = useState([]);
@@ -992,7 +995,7 @@ export default function TodoNotesApp() {
         setTotalNotes(prev => prev - 1);
     }, []);
 
-    // Уникальные хештеги для сайдбара
+    // Уникальные хештеги для сайдбара (сортированы по частоте кликов)
     const uniqueHashtags = useMemo(() => {
         const tags = new Set();
         notes.forEach(note => {
@@ -1000,8 +1003,15 @@ export default function TodoNotesApp() {
                 note.hashtags.forEach(tag => tags.add(tag));
             }
         });
-        return Array.from(tags).sort();
-    }, [notes]);
+        return Array.from(tags).sort((a, b) => {
+            const countA = tagClickCounts[a] || 0;
+            const countB = tagClickCounts[b] || 0;
+            if (countB !== countA) {
+                return countB - countA; // Сначала по частоте кликов (убывание)
+            }
+            return a.localeCompare(b); // При равенстве - по алфавиту
+        });
+    }, [notes, tagClickCounts]);
 
     // Фильтрация заметок
     const filteredNotes = useMemo(() => {
@@ -1031,13 +1041,40 @@ export default function TodoNotesApp() {
         return filtered;
     }, [notes, newNoteContent, selectedFilterTags]);
 
-    const toggleFilterTag = (tag) => {
+    // Загружаем счетчики кликов с сервера
+    useEffect(() => {
+        const loadClickCounts = async () => {
+            try {
+                const counts = await tagService.getClickCounts();
+                setTagClickCounts(counts);
+            } catch (err) {
+                console.error('Failed to load tag click counts:', err);
+            }
+        };
+        loadClickCounts();
+    }, []);
+
+    const toggleFilterTag = useCallback(async (tag) => {
         setSelectedFilterTags(prev =>
             prev.includes(tag)
                 ? prev.filter(t => t !== tag)
                 : [...prev, tag]
         );
-    };
+        // Отправляем клик на сервер и обновляем локальное состояние
+        try {
+            const result = await tagService.recordClick(tag);
+            setTagClickCounts(prev => ({
+                ...prev,
+                [tag]: result.click_count
+            }));
+        } catch (err) {
+            // При ошибке все равно обновляем локальный счетчик
+            setTagClickCounts(prev => ({
+                ...prev,
+                [tag]: (prev[tag] || 0) + 1
+            }));
+        }
+    }, []);
 
     const clearFilterTags = () => {
         setSelectedFilterTags([]);

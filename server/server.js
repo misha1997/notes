@@ -214,6 +214,19 @@ async function initDatabase() {
             await connection.query(`ALTER TABLE attachments ADD COLUMN deleted_at DATETIME NULL`);
         }
 
+        // Таблица для хранения счетчиков кликов по хештегам
+        await connection.query(`
+      CREATE TABLE IF NOT EXISTS tag_clicks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        tag VARCHAR(100) NOT NULL,
+        click_count INT DEFAULT 1,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_user_tag (user_id, tag)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
         connection.release();
         console.log('✅ База данных готова');
     } catch (err) {
@@ -675,6 +688,40 @@ app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
     await pool.query('UPDATE notes SET deleted_at = NOW() WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [req.params.id, req.user.id]);
     await pool.query('UPDATE attachments SET deleted_at = NOW() WHERE note_id = ? AND deleted_at IS NULL', [req.params.id]);
     res.json({ message: 'Удалено' });
+});
+
+// API для счетчиков кликов по хештегам
+app.get('/api/tags/clicks', authenticateToken, async (req, res) => {
+    const [rows] = await pool.query(
+        'SELECT tag, click_count FROM tag_clicks WHERE user_id = ?',
+        [req.user.id]
+    );
+    const result = {};
+    rows.forEach(row => {
+        result[row.tag] = row.click_count;
+    });
+    res.json(result);
+});
+
+app.post('/api/tags/click', authenticateToken, async (req, res) => {
+    const { tag } = req.body;
+    if (!tag) {
+        return res.status(400).json({ error: 'Tag is required' });
+    }
+
+    // Используем INSERT ... ON DUPLICATE KEY UPDATE для увеличения счетчика
+    await pool.query(
+        `INSERT INTO tag_clicks (user_id, tag, click_count) VALUES (?, ?, 1)
+         ON DUPLICATE KEY UPDATE click_count = click_count + 1, updated_at = NOW()`,
+        [req.user.id, tag]
+    );
+
+    // Возвращаем обновленное значение
+    const [rows] = await pool.query(
+        'SELECT click_count FROM tag_clicks WHERE user_id = ? AND tag = ?',
+        [req.user.id, tag]
+    );
+    res.json({ tag, click_count: rows[0]?.click_count || 1 });
 });
 
 // Global error handler

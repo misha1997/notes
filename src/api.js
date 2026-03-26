@@ -141,3 +141,21 @@ export const authService = {
         localStorage.removeItem('token');
     }
 };
+
+export const tagService = {
+    async getClickCounts() {
+        const res = handleForbidden(await fetch(`${api}/api/tags/clicks`, { headers: getHeaders() }));
+        if (!res.ok) return {};
+        return res.json();
+    },
+
+    async recordClick(tag) {
+        const res = handleForbidden(await fetch(`${api}/api/tags/click`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ tag })
+        }));
+        if (!res.ok) return { click_count: 0 };
+        return res.json();
+    }
+};
