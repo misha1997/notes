@@ -1098,6 +1098,32 @@ export default function TodoNotesApp() {
         loadTagData();
     }, []);
 
+    // Записываем клики для хештегов, введённых в поиск, если они существуют
+    const recordedSearchTags = useRef(new Set());
+    useEffect(() => {
+        const needle = newNoteContent.trim().toLowerCase();
+        const searchHashtags = needle.match(/#\S+/g) || [];
+        const existingTagSet = new Set(allTagNames.map(t => t.toLowerCase()));
+
+        for (const tag of searchHashtags) {
+            const key = tag.toLowerCase();
+            if (existingTagSet.has(key) && !recordedSearchTags.current.has(key)) {
+                recordedSearchTags.current.add(key);
+                tagService.recordClick(tag).then(result => {
+                    setTagClickCounts(prev => ({ ...prev, [tag]: result.click_count }));
+                }).catch(() => {
+                    setTagClickCounts(prev => ({ ...prev, [tag]: (prev[tag] || 0) + 1 }));
+                });
+            }
+        }
+        // Очищаем записанные теги, если пользователь удалил их из поиска
+        for (const key of recordedSearchTags.current) {
+            if (!searchHashtags.some(t => t.toLowerCase() === key)) {
+                recordedSearchTags.current.delete(key);
+            }
+        }
+    }, [newNoteContent, allTagNames]);
+
     const toggleFilterTag = useCallback(async (tag) => {
         setSelectedFilterTags(prev =>
             prev.includes(tag)
