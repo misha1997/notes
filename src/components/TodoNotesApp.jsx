@@ -578,6 +578,22 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                     ))}
                                 </div>
                             )}
+                            {uploadProgress && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between text-sm text-slate-400">
+                                        <span>Загрузка файлов{uploadProgress.fileCount > 1 ? ` (${uploadProgress.fileCount} шт.)` : ''}...</span>
+                                        <span className="text-cyan-400 font-medium">{uploadProgress.percent}%</span>
+                                    </div>
+                                    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${uploadProgress.percent}%` }}
+                                            transition={{ duration: 0.3, ease: 'easeOut' }}
+                                            className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full"
+                                        />
+                                    </div>
+                                </div>
+                            )}
                             <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl text-sm text-slate-400 hover:text-cyan-300 hover:border-cyan-500/30 cursor-pointer transition-all">
                                 <Plus size={16} />
                                 <span>Выбрать файл</span>
@@ -726,6 +742,9 @@ export default function TodoNotesApp() {
             console.error('Failed to refresh hashtags:', err);
         }
     }, []);
+
+    // Прогресс загрузки файлов
+    const [uploadProgress, setUploadProgress] = useState(null); // null | { percent, fileCount }
 
     const [editingId, setEditingId] = useState(null);
     const [editContent, setEditContent] = useState('');
@@ -929,11 +948,11 @@ export default function TodoNotesApp() {
                 let attachments = [];
 
                 if (noteId && newFiles.length) {
-                    const uploads = [];
-                    for (const file of newFiles) {
-                        uploads.push(noteService.uploadAttachment(noteId, file));
-                    }
-                    attachments = await Promise.all(uploads);
+                    setUploadProgress({ percent: 0, fileCount: newFiles.length });
+                    attachments = await noteService.uploadAttachments(noteId, newFiles, (p) =>
+                        setUploadProgress(prev => prev ? { ...prev, percent: p } : null)
+                    );
+                    setUploadProgress(null);
                 }
 
                 const noteToAdd = {
@@ -982,11 +1001,11 @@ export default function TodoNotesApp() {
         }
 
         if (newEditFiles.length) {
-            const uploads = [];
-            for (const file of newEditFiles) {
-                uploads.push(noteService.uploadAttachment(editingId, file));
-            }
-            const uploaded = await Promise.all(uploads);
+            setUploadProgress({ percent: 0, fileCount: newEditFiles.length });
+            const uploaded = await noteService.uploadAttachments(editingId, newEditFiles, (p) =>
+                setUploadProgress(prev => prev ? { ...prev, percent: p } : null)
+            );
+            setUploadProgress(null);
             finalAttachments = [...finalAttachments, ...uploaded];
         }
 
@@ -1238,6 +1257,23 @@ export default function TodoNotesApp() {
                                             </button>
                                         </span>
                                     ))}
+                                </div>
+                            )}
+
+                            {uploadProgress && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between text-sm text-slate-400">
+                                        <span>Загрузка файлов{uploadProgress.fileCount > 1 ? ` (${uploadProgress.fileCount} шт.)` : ''}...</span>
+                                        <span className="text-cyan-400 font-medium">{uploadProgress.percent}%</span>
+                                    </div>
+                                    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${uploadProgress.percent}%` }}
+                                            transition={{ duration: 0.3, ease: 'easeOut' }}
+                                            className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full"
+                                        />
+                                    </div>
                                 </div>
                             )}
 

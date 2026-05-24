@@ -66,16 +66,48 @@ export const noteService = {
         return res.json();
     },
 
-    async uploadAttachment(id, file) {
+    async uploadAttachments(id, files, onProgress) {
         const formData = new FormData();
-        formData.append('file', file);
-        const res = handleForbidden(await fetch(`${api}/api/notes/${id}/attachments`, {
-            method: 'POST',
-            headers: getAuthHeader(),
-            body: formData
-        }));
-        if (!res.ok) throw new Error('Upload failed');
-        return res.json();
+        for (const file of files) {
+            formData.append('files', file);
+        }
+
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${api}/api/notes/${id}/attachments`);
+            xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+
+            if (onProgress) {
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        onProgress(Math.round((e.loaded / e.total) * 100));
+                    }
+                };
+            }
+
+            xhr.onload = () => {
+                if (xhr.status === 403) {
+                    localStorage.removeItem('token');
+                    if (window.location.pathname !== '/login') {
+                        window.location.assign('/login');
+                    }
+                    reject(new Error('Unauthorized'));
+                    return;
+                }
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        resolve(JSON.parse(xhr.responseText));
+                    } catch {
+                        resolve([]);
+                    }
+                } else {
+                    reject(new Error('Upload failed'));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('Upload failed'));
+            xhr.send(formData);
+        });
     },
 
     async deleteAttachment(noteId, attachmentId) {

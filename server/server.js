@@ -63,24 +63,17 @@ const apiLimiter = rateLimit({
     message: { error: 'Превышен лимит запросов' },
 });
 
-const uploadLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 10, // 10 загрузок файлов в минуту
-    message: { error: 'Слишком много загрузок файлов' },
-});
-
 app.use(cors({
     origin: process.env.CLIENT_URL || 'http://localhost:3000',
     credentials: true
 }));
 
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '500mb' }));
 
 // Apply rate limiting
 app.use('/api/auth/', authLimiter);
 app.use('/api/', apiLimiter);
-app.use('/api/notes/:id/attachments', uploadLimiter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/download/:filename', (req, res) => {
     const filename = path.basename(req.params.filename);
@@ -107,34 +100,8 @@ const storage = multer.diskStorage({
     }
 });
 
-// File type whitelist
-const ALLOWED_MIME_TYPES = [
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-    'text/plain', 'text/markdown', 'text/csv',
-    'application/pdf', 'application/json',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
-    'application/zip', 'application/x-zip-compressed',
-    'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/webm',
-    'video/mp4', 'video/webm', 'video/ogg'
-];
-
-const ALLOWED_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|txt|md|csv|pdf|json|docx|xlsx|pptx|zip|mp3|wav|ogg|webm|mp4)$/i;
-
-const fileFilter = (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (ALLOWED_MIME_TYPES.includes(file.mimetype) && ALLOWED_EXTENSIONS.test(ext)) {
-        cb(null, true);
-    } else {
-        cb(new Error('Недопустимый тип файла'), false);
-    }
-};
-
 const upload = multer({
-    storage,
-    limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
-    fileFilter
+    storage
 });
 
 const pool = mysql.createPool({
@@ -634,37 +601,43 @@ app.put('/api/notes/:id', authenticateToken, async (req, res) => {
     }
 });
 
-app.post('/api/notes/:id/attachments', authenticateToken, upload.single('file'), async (req, res) => {
+app.post('/api/notes/:id/attachments', authenticateToken, upload.array('files'), async (req, res) => {
     const noteId = req.params.id;
-    if (!req.file) {
-        return res.status(400).json({ error: 'Файл не найден' });
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: 'Файлы не найдены' });
     }
 
     const [notes] = await pool.query('SELECT id FROM notes WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [noteId, req.user.id]);
     if (!notes.length) {
-        fs.unlink(path.join(uploadsDir, req.file.filename), () => { });
+        for (const file of req.files) {
+            fs.unlink(path.join(uploadsDir, file.filename), () => { });
+        }
         return res.status(404).json({ error: 'Заметка не найдена' });
     }
 
-    const { filename, originalname, mimetype, size } = req.file;
-    const decodedOriginalName = Buffer.from(originalname, 'latin1').toString('utf8');
-    const [result] = await pool.query(
-        'INSERT INTO attachments (note_id, filename, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)',
-        [noteId, filename, decodedOriginalName, mimetype, size]
-    );
-
     const proto = req.headers['x-forwarded-proto'] || req.protocol;
-    const attachment = {
-        id: result.insertId,
-        noteId: Number(noteId),
-        filename,
-        originalName: decodedOriginalName,
-        mimeType: mimetype,
-        size,
-        url: `${proto}://${req.get('host')}/download/${encodeURIComponent(filename)}`
-    };
+    const attachments = [];
 
-    res.status(201).json(attachment);
+    for (const file of req.files) {
+        const { filename, originalname, mimetype, size } = file;
+        const decodedOriginalName = Buffer.from(originalname, 'latin1').toString('utf8');
+        const [result] = await pool.query(
+            'INSERT INTO attachments (note_id, filename, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)',
+            [noteId, filename, decodedOriginalName, mimetype, size]
+        );
+
+        attachments.push({
+            id: result.insertId,
+            noteId: Number(noteId),
+            filename,
+            originalName: decodedOriginalName,
+            mimeType: mimetype,
+            size,
+            url: `${proto}://${req.get('host')}/download/${encodeURIComponent(filename)}`
+        });
+    }
+
+    res.status(201).json(attachments);
 });
 
 app.delete('/api/notes/:noteId/attachments/:attachmentId', authenticateToken, async (req, res) => {
