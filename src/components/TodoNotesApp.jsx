@@ -718,6 +718,15 @@ export default function TodoNotesApp() {
     // Счетчики кликов по хештегам (для сортировки по популярности)
     const [tagClickCounts, setTagClickCounts] = useState({});
 
+    const refreshHashtags = useCallback(async () => {
+        try {
+            const tags = await tagService.getAll();
+            setAllHashtags(tags);
+        } catch (err) {
+            console.error('Failed to refresh hashtags:', err);
+        }
+    }, []);
+
     const [editingId, setEditingId] = useState(null);
     const [editContent, setEditContent] = useState('');
     const [editHashtags, setEditHashtags] = useState([]);
@@ -1068,15 +1077,6 @@ export default function TodoNotesApp() {
             }
         };
         loadTagData();
-    }, []);
-
-    const refreshHashtags = useCallback(async () => {
-        try {
-            const tags = await tagService.getAll();
-            setAllHashtags(tags);
-        } catch (err) {
-            console.error('Failed to refresh hashtags:', err);
-        }
     }, []);
 
     const toggleFilterTag = useCallback(async (tag) => {
