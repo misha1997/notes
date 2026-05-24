@@ -143,6 +143,12 @@ export const authService = {
 };
 
 export const tagService = {
+    async getAll() {
+        const res = handleForbidden(await fetch(`${api}/api/tags`, { headers: getHeaders() }));
+        if (!res.ok) return [];
+        return res.json();
+    },
+
     async getClickCounts() {
         const res = handleForbidden(await fetch(`${api}/api/tags/clicks`, { headers: getHeaders() }));
         if (!res.ok) return {};

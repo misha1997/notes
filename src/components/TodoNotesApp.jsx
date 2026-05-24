@@ -459,7 +459,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
         removeExistingAttachment,
         removeNewEditFile,
         handleEditFilesChange,
-        uniqueHashtags
+        allTagNames
     },
     ref
 ) {
@@ -533,7 +533,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                 />
                             </div>
                             <HashtagCloud
-                                availableTags={uniqueHashtags}
+                                availableTags={allTagNames}
                                 currentTags={editHashtags}
                                 inputValue={editHashtagInput}
                                 onTagClick={(tag) => {
@@ -713,6 +713,8 @@ export default function TodoNotesApp() {
     // Фильтрация по хештегам
     const [selectedFilterTags, setSelectedFilterTags] = useState([]);
 
+    // Все хештеги пользователя с количеством заметок (загружаются отдельно от пагинации)
+    const [allHashtags, setAllHashtags] = useState([]); // [{ tag, count }]
     // Счетчики кликов по хештегам (для сортировки по популярности)
     const [tagClickCounts, setTagClickCounts] = useState({});
 
@@ -936,6 +938,7 @@ export default function TodoNotesApp() {
                 setNewNoteContent('');
                 setCurrentHashtags([]);
                 setNewFiles([]);
+                refreshHashtags();
             } catch (err) {
                 console.error("Ошибка при добавлении:", err);
             }
@@ -987,53 +990,62 @@ export default function TodoNotesApp() {
         setNewEditFiles([]);
         setAttachmentsToRemove([]);
         setEditAttachments([]);
+        refreshHashtags();
     };
 
     const deleteNote = useCallback(async (id) => {
         await noteService.delete(id);
         setNotes(prev => prev.filter(n => n.id !== id));
         setTotalNotes(prev => prev - 1);
-    }, []);
+        refreshHashtags();
+    }, [refreshHashtags]);
 
     // Уникальные хештеги для сайдбара (сортированы по частоте кликов)
     const uniqueHashtags = useMemo(() => {
-        const tags = new Set();
-        notes.forEach(note => {
-            if (note.hashtags?.length) {
-                note.hashtags.forEach(tag => tags.add(tag));
+        return [...allHashtags].sort((a, b) => {
+            const clickA = tagClickCounts[a.tag] || 0;
+            const clickB = tagClickCounts[b.tag] || 0;
+            if (clickB !== clickA) {
+                return clickB - clickA; // Сначала по частоте кликов (убывание)
             }
-        });
-        return Array.from(tags).sort((a, b) => {
-            const countA = tagClickCounts[a] || 0;
-            const countB = tagClickCounts[b] || 0;
-            if (countB !== countA) {
-                return countB - countA; // Сначала по частоте кликов (убывание)
+            if (b.count !== a.count) {
+                return b.count - a.count; // По количеству заметок
             }
-            return a.localeCompare(b); // При равенстве - по алфавиту
+            return a.tag.localeCompare(b.tag); // При равенстве - по алфавиту
         });
-    }, [notes, tagClickCounts]);
+    }, [allHashtags, tagClickCounts]);
+
+    // Список тегов (строки) для автодополнения
+    const allTagNames = useMemo(() => uniqueHashtags.map(h => h.tag), [uniqueHashtags]);
 
     // Фильтрация заметок
     const filteredNotes = useMemo(() => {
         let filtered = notes;
 
-        // Фильтр по тексту в поле ввода заметки (поиск)
+        // Извлекаем хештеги из текста поиска и определяем обычный текст
         const needle = newNoteContent.trim().toLowerCase();
-        if (needle) {
+        const searchHashtags = needle.match(/#\S+/g) || [];
+        const searchText = needle.replace(/#\S+/g, '').trim();
+
+        // Фильтр по обычному тексту (без хештегов)
+        if (searchText) {
             filtered = filtered.filter(note => {
-                const matchesText = note.content?.toLowerCase().includes(needle);
+                const matchesText = note.content?.toLowerCase().includes(searchText);
                 const matchesHashtag = note.hashtags && note.hashtags.some(tag =>
-                    tag.toLowerCase().includes(needle)
+                    tag.toLowerCase().includes(searchText)
                 );
                 return matchesText || matchesHashtag;
             });
         }
 
-        // Фильтр по выбранным хештегам
-        if (selectedFilterTags.length > 0) {
+        // Объединяем хештеги из поиска с выбранными в сайдбаре (OR-логика)
+        const allFilterTags = [...new Set([...selectedFilterTags, ...searchHashtags])];
+        if (allFilterTags.length > 0) {
             filtered = filtered.filter(note =>
-                selectedFilterTags.every(tag =>
-                    note.hashtags && note.hashtags.includes(tag)
+                allFilterTags.some(filterTag =>
+                    note.hashtags && note.hashtags.some(noteTag =>
+                        noteTag.toLowerCase() === filterTag.toLowerCase()
+                    )
                 )
             );
         }
@@ -1041,17 +1053,30 @@ export default function TodoNotesApp() {
         return filtered;
     }, [notes, newNoteContent, selectedFilterTags]);
 
-    // Загружаем счетчики кликов с сервера
+    // Загружаем все хештеги и счетчики кликов с сервера
     useEffect(() => {
-        const loadClickCounts = async () => {
+        const loadTagData = async () => {
             try {
-                const counts = await tagService.getClickCounts();
+                const [tags, counts] = await Promise.all([
+                    tagService.getAll(),
+                    tagService.getClickCounts()
+                ]);
+                setAllHashtags(tags);
                 setTagClickCounts(counts);
             } catch (err) {
-                console.error('Failed to load tag click counts:', err);
+                console.error('Failed to load tag data:', err);
             }
         };
-        loadClickCounts();
+        loadTagData();
+    }, []);
+
+    const refreshHashtags = useCallback(async () => {
+        try {
+            const tags = await tagService.getAll();
+            setAllHashtags(tags);
+        } catch (err) {
+            console.error('Failed to refresh hashtags:', err);
+        }
     }, []);
 
     const toggleFilterTag = useCallback(async (tag) => {
@@ -1190,7 +1215,7 @@ export default function TodoNotesApp() {
                                     />
                                 </div>
                                 <HashtagCloud
-                                    availableTags={uniqueHashtags}
+                                    availableTags={allTagNames}
                                     currentTags={currentHashtags}
                                     inputValue={hashtagInput}
                                     onTagClick={(tag) => {
@@ -1271,7 +1296,7 @@ export default function TodoNotesApp() {
                                             removeExistingAttachment={isEditing ? removeExistingAttachment : undefined}
                                             removeNewEditFile={isEditing ? removeNewEditFile : undefined}
                                             handleEditFilesChange={isEditing ? handleEditFilesChange : undefined}
-                                            uniqueHashtags={uniqueHashtags}
+                                            allTagNames={allTagNames}
                                         />
                                     );
                                 })}
@@ -1352,9 +1377,8 @@ export default function TodoNotesApp() {
                         <div className="flex-1 overflow-y-auto scrollbar-styled -mx-2 px-2">
                             {uniqueHashtags.length > 0 ? (
                                 <div className="space-y-2">
-                                    {uniqueHashtags.map(tag => {
+                                    {uniqueHashtags.map(({ tag, count }) => {
                                         const isSelected = selectedFilterTags.includes(tag);
-                                        const count = notes.filter(n => n.hashtags?.includes(tag)).length;
                                         return (
                                             <button
                                                 key={tag}

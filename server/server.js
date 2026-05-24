@@ -690,6 +690,20 @@ app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
     res.json({ message: 'Удалено' });
 });
 
+// API для получения всех хештегов пользователя с количеством заметок
+app.get('/api/tags', authenticateToken, async (req, res) => {
+    const [rows] = await pool.query(
+        `SELECT h.tag, COUNT(DISTINCT n.id) as count
+         FROM hashtags h
+         JOIN notes n ON n.id = h.note_id
+         WHERE n.user_id = ? AND n.deleted_at IS NULL
+         GROUP BY h.tag
+         ORDER BY count DESC, h.tag ASC`,
+        [req.user.id]
+    );
+    res.json(rows.map(row => ({ tag: row.tag, count: row.count })));
+});
+
 // API для счетчиков кликов по хештегам
 app.get('/api/tags/clicks', authenticateToken, async (req, res) => {
     const [rows] = await pool.query(
