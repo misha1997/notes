@@ -459,7 +459,8 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
         removeExistingAttachment,
         removeNewEditFile,
         handleEditFilesChange,
-        allTagNames
+        allTagNames,
+        uploadProgress
     },
     ref
 ) {
@@ -1359,6 +1360,7 @@ export default function TodoNotesApp() {
                                             removeNewEditFile={isEditing ? removeNewEditFile : undefined}
                                             handleEditFilesChange={isEditing ? handleEditFilesChange : undefined}
                                             allTagNames={allTagNames}
+                                            uploadProgress={isEditing ? uploadProgress : null}
                                         />
                                     );
                                 })}
