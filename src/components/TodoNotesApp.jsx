@@ -657,12 +657,17 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                 </button>
                             </div>
                         </div>
-                        <div className={`relative ${!expanded ? 'max-h-[160px] overflow-hidden' : ''}`}>
-                            <MarkdownRenderer content={note.content} />
-                            {!expanded && (
-                                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[rgba(15,23,42,0.95)] to-transparent pointer-events-none" />
-                            )}
-                        </div>
+                        {(() => {
+                            const isLong = note.content.split('\n').length > MAX_COLLAPSED_LINES;
+                            return (
+                                <div className={`relative ${isLong && !expanded ? 'max-h-[220px] overflow-hidden' : ''}`}>
+                                    <MarkdownRenderer content={note.content} />
+                                    {isLong && !expanded && (
+                                        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[rgba(15,23,42,0.95)] to-transparent pointer-events-none" />
+                                    )}
+                                </div>
+                            );
+                        })()}
                         {note.content.split('\n').length > MAX_COLLAPSED_LINES && (
                             <button
                                 onClick={onToggleExpand}
