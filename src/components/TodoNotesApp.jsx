@@ -1,5 +1,5 @@
 import React, { useState, useEffect, forwardRef, useRef, useCallback, useMemo, memo } from 'react';
-import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download, Sparkles, Plus, Check, User } from 'lucide-react';
+import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download, Sparkles, Plus, Check, User, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
 import { noteService, userService, tagService } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -436,6 +436,8 @@ const SelectedHashtags = memo(function SelectedHashtags({ tags, onRemove }) {
     );
 });
 
+const MAX_COLLAPSED_LINES = 6;
+
 const DraggableNote = memo(forwardRef(function DraggableNote(
     {
         note,
@@ -460,7 +462,9 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
         removeNewEditFile,
         handleEditFilesChange,
         allTagNames,
-        uploadProgress
+        uploadProgress,
+        expanded,
+        onToggleExpand
     },
     ref
 ) {
@@ -653,7 +657,30 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                 </button>
                             </div>
                         </div>
-                        <MarkdownRenderer content={note.content} />
+                        <div className={`relative ${!expanded ? 'max-h-[160px] overflow-hidden' : ''}`}>
+                            <MarkdownRenderer content={note.content} />
+                            {!expanded && (
+                                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[rgba(15,23,42,0.95)] to-transparent pointer-events-none" />
+                            )}
+                        </div>
+                        {note.content.split('\n').length > MAX_COLLAPSED_LINES && (
+                            <button
+                                onClick={onToggleExpand}
+                                className="mt-2 flex items-center gap-1.5 text-sm text-cyan-400 hover:text-cyan-300 transition-colors font-medium"
+                            >
+                                {expanded ? (
+                                    <>
+                                        <span>Свернуть</span>
+                                        <ChevronUp size={16} />
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>Показать больше</span>
+                                        <ChevronDown size={16} />
+                                    </>
+                                )}
+                            </button>
+                        )}
 
                         {note.hashtags?.length > 0 ? (
                             <div className="flex flex-wrap gap-2 mt-4">
@@ -721,6 +748,18 @@ export default function TodoNotesApp() {
         navigate('/login');
     };
 
+    const toggleNoteExpand = useCallback((noteId) => {
+        setExpandedNotes(prev => {
+            const next = new Set(prev);
+            if (next.has(noteId)) {
+                next.delete(noteId);
+            } else {
+                next.add(noteId);
+            }
+            return next;
+        });
+    }, []);
+
     // Содержимое новой заметки
     const [newNoteContent, setNewNoteContent] = useState('');
     const [hashtagInput, setHashtagInput] = useState('');
@@ -756,6 +795,7 @@ export default function TodoNotesApp() {
     const [attachmentsToRemove, setAttachmentsToRemove] = useState([]);
 
     // Account modal state
+    const [expandedNotes, setExpandedNotes] = useState(new Set());
     const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
     const [accountEmail, setAccountEmail] = useState('');
     const [currentPassword, setCurrentPassword] = useState('');
@@ -1361,6 +1401,8 @@ export default function TodoNotesApp() {
                                             handleEditFilesChange={isEditing ? handleEditFilesChange : undefined}
                                             allTagNames={allTagNames}
                                             uploadProgress={isEditing ? uploadProgress : null}
+                                            expanded={expandedNotes.has(note.id)}
+                                            onToggleExpand={() => toggleNoteExpand(note.id)}
                                         />
                                     );
                                 })}
