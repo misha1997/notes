@@ -77,9 +77,10 @@ app.use('/api/', apiLimiter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/download/:filename', (req, res) => {
     const filename = path.basename(req.params.filename);
+    const encodedFilename = encodeURIComponent(filename);
 
-    res.setHeader('X-Accel-Redirect', `/protected-uploads/${filename}`);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Accel-Redirect', `/protected-uploads/${encodedFilename}`);
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFilename}; filename="${filename.replace(/[^a-zA-Z0-9_.-]/g, '_')}"`);
     res.setHeader('Content-Type', 'application/octet-stream');
 
     res.status(200).end();
