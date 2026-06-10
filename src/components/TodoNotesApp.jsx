@@ -461,6 +461,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
         removeExistingAttachment,
         removeNewEditFile,
         handleEditFilesChange,
+        addEditFilesFromDrop,
         allTagNames,
         uploadProgress,
         expanded,
@@ -470,6 +471,44 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
 ) {
     const dragControls = useDragControls();
     const [copied, setCopied] = useState(false);
+    const [isDraggingEdit, setIsDraggingEdit] = useState(false);
+    const dragCounterEditRef = useRef(0);
+
+    const handleDragEnterEdit = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterEditRef.current++;
+        if (e.dataTransfer.types.includes('Files')) {
+            setIsDraggingEdit(true);
+        }
+    }, []);
+
+    const handleDragLeaveEdit = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterEditRef.current--;
+        if (dragCounterEditRef.current === 0) {
+            setIsDraggingEdit(false);
+        }
+    }, []);
+
+    const handleDragOverEdit = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
+
+    const handleDropEdit = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterEditRef.current = 0;
+        setIsDraggingEdit(false);
+        if (addEditFilesFromDrop) {
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length) {
+                addEditFilesFromDrop(files);
+            }
+        }
+    }, [addEditFilesFromDrop]);
 
     const handleCopy = useCallback(async () => {
         const text = editContent || note.content;
@@ -516,7 +555,30 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                 </div>
 
                 {isEditing ? (
-                    <div className="space-y-4 ml-8">
+                    <div
+                        className="relative space-y-4 ml-8"
+                        onDragEnter={handleDragEnterEdit}
+                        onDragLeave={handleDragLeaveEdit}
+                        onDragOver={handleDragOverEdit}
+                        onDrop={handleDropEdit}
+                    >
+                        <AnimatePresence>
+                            {isDraggingEdit && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-cyan-500/10 backdrop-blur-sm border-2 border-dashed border-cyan-400/60 rounded-2xl pointer-events-none"
+                                >
+                                    <div className="p-4 bg-cyan-500/20 rounded-2xl">
+                                        <Paperclip size={40} className="text-cyan-400" />
+                                    </div>
+                                    <p className="text-lg font-medium text-cyan-300">Перетащите файлы сюда</p>
+                                    <p className="text-sm text-slate-400">Они будут прикреплены к заметке</p>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                         <RichTextEditor content={editContent} onChange={setEditContent} />
 
                         <div className="space-y-2">
@@ -771,6 +833,55 @@ export default function TodoNotesApp() {
     const [currentHashtags, setCurrentHashtags] = useState([]);
     const [newFiles, setNewFiles] = useState([]);
 
+    // Drag-and-drop для формы создания заметки
+    const [isDraggingNew, setIsDraggingNew] = useState(false);
+    const dragCounterNewRef = useRef(0);
+
+    const handleDragEnterNew = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterNewRef.current++;
+        if (e.dataTransfer.types.includes('Files')) {
+            setIsDraggingNew(true);
+        }
+    }, []);
+
+    const handleDragLeaveNew = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterNewRef.current--;
+        if (dragCounterNewRef.current === 0) {
+            setIsDraggingNew(false);
+        }
+    }, []);
+
+    const handleDragOverNew = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
+
+    const handleDropNew = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterNewRef.current = 0;
+        setIsDraggingNew(false);
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length) {
+            setNewFiles(prev => {
+                const existingKeys = new Set(prev.map(f => `${f.name}-${f.size}-${f.lastModified}`));
+                const merged = [...prev];
+                for (const file of files) {
+                    const key = `${file.name}-${file.size}-${file.lastModified}`;
+                    if (!existingKeys.has(key)) {
+                        existingKeys.add(key);
+                        merged.push(file);
+                    }
+                }
+                return merged;
+            });
+        }
+    }, []);
+
     // Фильтрация по хештегам
     const [selectedFilterTags, setSelectedFilterTags] = useState([]);
 
@@ -975,6 +1086,21 @@ export default function TodoNotesApp() {
     const removeNewEditFile = (name) => {
         setNewEditFiles(newEditFiles.filter(f => f.name !== name));
     };
+
+    const addEditFilesFromDrop = useCallback((files) => {
+        setNewEditFiles(prev => {
+            const existingKeys = new Set(prev.map(f => `${f.name}-${f.size}-${f.lastModified}`));
+            const merged = [...prev];
+            for (const file of files) {
+                const key = `${file.name}-${file.size}-${file.lastModified}`;
+                if (!existingKeys.has(key)) {
+                    existingKeys.add(key);
+                    merged.push(file);
+                }
+            }
+            return merged;
+        });
+    }, []);
 
     const removeExistingAttachment = (id) => {
         setAttachmentsToRemove([...attachmentsToRemove, id]);
@@ -1284,7 +1410,30 @@ export default function TodoNotesApp() {
                         </div>
 
                         {/* Create Note Form */}
-                        <div className="space-y-4 mb-8">
+                        <div
+                            className="relative space-y-4 mb-8"
+                            onDragEnter={handleDragEnterNew}
+                            onDragLeave={handleDragLeaveNew}
+                            onDragOver={handleDragOverNew}
+                            onDrop={handleDropNew}
+                        >
+                            <AnimatePresence>
+                                {isDraggingNew && (
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-cyan-500/10 backdrop-blur-sm border-2 border-dashed border-cyan-400/60 rounded-2xl pointer-events-none"
+                                    >
+                                        <div className="p-4 bg-cyan-500/20 rounded-2xl">
+                                            <Paperclip size={40} className="text-cyan-400" />
+                                        </div>
+                                        <p className="text-lg font-medium text-cyan-300">Перетащите файлы сюда</p>
+                                        <p className="text-sm text-slate-400">Они будут прикреплены к заметке</p>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                             <RichTextEditor content={newNoteContent} onChange={setNewNoteContent} />
 
                             <div className="space-y-2">
@@ -1404,6 +1553,7 @@ export default function TodoNotesApp() {
                                             removeExistingAttachment={isEditing ? removeExistingAttachment : undefined}
                                             removeNewEditFile={isEditing ? removeNewEditFile : undefined}
                                             handleEditFilesChange={isEditing ? handleEditFilesChange : undefined}
+                                            addEditFilesFromDrop={isEditing ? addEditFilesFromDrop : undefined}
                                             allTagNames={allTagNames}
                                             uploadProgress={isEditing ? uploadProgress : null}
                                             expanded={expandedNotes.has(note.id)}
