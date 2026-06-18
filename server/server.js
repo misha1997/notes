@@ -177,6 +177,11 @@ async function initDatabase() {
         if (noteDeletedCol.length === 0) {
             await connection.query(`ALTER TABLE notes ADD COLUMN deleted_at DATETIME NULL`);
         }
+        // Колонка position для drag-and-drop сортировки (ORDER BY n.position в /api/notes)
+        const [positionCol] = await connection.query(`SHOW COLUMNS FROM notes LIKE 'position'`);
+        if (positionCol.length === 0) {
+            await connection.query(`ALTER TABLE notes ADD COLUMN position INT NOT NULL DEFAULT 0`);
+        }
         const [attachmentDeletedCol] = await connection.query(`SHOW COLUMNS FROM attachments LIKE 'deleted_at'`);
         if (attachmentDeletedCol.length === 0) {
             await connection.query(`ALTER TABLE attachments ADD COLUMN deleted_at DATETIME NULL`);

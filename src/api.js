@@ -1,4 +1,6 @@
-const api = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+// Пустое/не заданное значение → относительные пути (для продакшна за nginx-прокси).
+// При разработке (без REACT_APP_API_URL) используется localhost:3001.
+const api = process.env.REACT_APP_API_URL ?? 'http://localhost:3001';
 
 const getHeaders = () => ({
     'Content-Type': 'application/json',

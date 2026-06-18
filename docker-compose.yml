@@ -1,0 +1,66 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: notes-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-notes_db}
+      MYSQL_USER: ${DB_USER:-notes}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-notes_pass}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_pass}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - notes-net
+
+  backend:
+    build: ./server
+    container_name: notes-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      JWT_SECRET: ${JWT_SECRET}
+      DB_HOST: db
+      DB_USER: ${DB_USER:-notes}
+      DB_PASSWORD: ${DB_PASSWORD:-notes_pass}
+      DB_NAME: ${DB_NAME:-notes_db}
+      # CORS-origin фронтенда (публичный адрес, по которому открывается приложение)
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:8080}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    volumes:
+      - uploads:/app/uploads
+    networks:
+      - notes-net
+
+  frontend:
+    build:
+      context: .
+      args:
+        REACT_APP_API_URL: ""
+    container_name: notes-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    volumes:
+      # Общий volume загрузок: бэкенд пишет, nginx отдаёт через X-Accel-Redirect
+      - uploads:/usr/share/nginx/uploads:ro
+    networks:
+      - notes-net
+
+volumes:
+  db_data:
+  uploads:
+
+networks:
+  notes-net:
+    driver: bridge
