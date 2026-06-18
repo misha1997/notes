@@ -1,5 +1,5 @@
 import React, { useState, useEffect, forwardRef, useRef, useCallback, useMemo, memo } from 'react';
-import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download, Sparkles, Plus, Check, User, ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download, Sparkles, Plus, Check, User, ChevronDown, ChevronUp, Search, TrendingUp, ArrowDownAZ } from 'lucide-react';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
 import { noteService, userService, tagService } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -1619,15 +1619,15 @@ export default function TodoNotesApp() {
                         </div>
 
                         {/* Search & Sort Controls */}
-                        <div className="mb-4 space-y-2">
-                            <div className="relative">
+                        <div className="mb-4 flex items-center gap-2">
+                            <div className="relative flex-1">
                                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                                 <input
                                     type="text"
                                     value={tagSearch}
                                     onChange={(e) => setTagSearch(e.target.value)}
                                     placeholder="Поиск тегов..."
-                                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400/50 focus:bg-slate-800/70 transition-all"
+                                    className="w-full pl-9 pr-8 py-2 text-sm rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400/50 focus:bg-slate-800/70 transition-all"
                                 />
                                 {tagSearch && (
                                     <button
@@ -1641,23 +1641,25 @@ export default function TodoNotesApp() {
                             <div className="flex rounded-xl bg-slate-800/40 border border-slate-700/50 p-0.5">
                                 <button
                                     onClick={() => setTagSort('popularity')}
-                                    className={`flex-1 px-3 py-1.5 text-xs rounded-lg transition-all ${
+                                    title="По популярности"
+                                    className={`p-2 rounded-lg transition-all ${
                                         tagSort === 'popularity'
-                                            ? 'bg-cyan-500/20 text-cyan-300 font-medium'
+                                            ? 'bg-cyan-500/20 text-cyan-300'
                                             : 'text-slate-500 hover:text-slate-300'
                                     }`}
                                 >
-                                    По популярности
+                                    <TrendingUp size={16} />
                                 </button>
                                 <button
                                     onClick={() => setTagSort('name')}
-                                    className={`flex-1 px-3 py-1.5 text-xs rounded-lg transition-all ${
+                                    title="По названию"
+                                    className={`p-2 rounded-lg transition-all ${
                                         tagSort === 'name'
-                                            ? 'bg-cyan-500/20 text-cyan-300 font-medium'
+                                            ? 'bg-cyan-500/20 text-cyan-300'
                                             : 'text-slate-500 hover:text-slate-300'
                                     }`}
                                 >
-                                    По названию
+                                    <ArrowDownAZ size={16} />
                                 </button>
                             </div>
                         </div>
