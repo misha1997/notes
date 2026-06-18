@@ -1,5 +1,5 @@
 import React, { useState, useEffect, forwardRef, useRef, useCallback, useMemo, memo } from 'react';
-import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download, Sparkles, Plus, Check, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download, Sparkles, Plus, Check, User, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
 import { noteService, userService, tagService } from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -889,6 +889,9 @@ export default function TodoNotesApp() {
     const [allHashtags, setAllHashtags] = useState([]); // [{ tag, count }]
     // Счетчики кликов по хештегам (для сортировки по популярности)
     const [tagClickCounts, setTagClickCounts] = useState({});
+    // Поиск и сортировка тегов в сайдбаре
+    const [tagSearch, setTagSearch] = useState('');
+    const [tagSort, setTagSort] = useState('popularity'); // 'popularity' | 'name'
 
     const refreshHashtags = useCallback(async () => {
         try {
@@ -1200,20 +1203,28 @@ export default function TodoNotesApp() {
         refreshHashtags();
     }, [refreshHashtags]);
 
-    // Уникальные хештеги для сайдбара (сортированы по частоте кликов)
+    // Уникальные хештеги для сайдбара (с поиском и сортировкой)
     const uniqueHashtags = useMemo(() => {
-        return [...allHashtags].sort((a, b) => {
+        const query = tagSearch.trim().toLowerCase().replace(/^#/, '');
+        const filtered = query
+            ? allHashtags.filter(h => h.tag.toLowerCase().replace(/^#/, '').includes(query))
+            : allHashtags;
+        return [...filtered].sort((a, b) => {
+            if (tagSort === 'name') {
+                return a.tag.localeCompare(b.tag);
+            }
+            // По популярности: сначала по частоте кликов, затем по кол-ву заметок, затем по алфавиту
             const clickA = tagClickCounts[a.tag] || 0;
             const clickB = tagClickCounts[b.tag] || 0;
             if (clickB !== clickA) {
-                return clickB - clickA; // Сначала по частоте кликов (убывание)
+                return clickB - clickA;
             }
             if (b.count !== a.count) {
-                return b.count - a.count; // По количеству заметок
+                return b.count - a.count;
             }
-            return a.tag.localeCompare(b.tag); // При равенстве - по алфавиту
+            return a.tag.localeCompare(b.tag);
         });
-    }, [allHashtags, tagClickCounts]);
+    }, [allHashtags, tagClickCounts, tagSearch, tagSort]);
 
     // Список тегов (строки) для автодополнения
     const allTagNames = useMemo(() => uniqueHashtags.map(h => h.tag), [uniqueHashtags]);
@@ -1595,7 +1606,7 @@ export default function TodoNotesApp() {
                                     <Hash size={16} className="text-cyan-400" />
                                 </div>
                                 <span>Теги</span>
-                                <span className="text-sm text-slate-500 font-normal">({uniqueHashtags.length})</span>
+                                <span className="text-sm text-slate-500 font-normal">({allHashtags.length})</span>
                             </h2>
                             {selectedFilterTags.length > 0 && (
                                 <button
@@ -1605,6 +1616,50 @@ export default function TodoNotesApp() {
                                     Сбросить
                                 </button>
                             )}
+                        </div>
+
+                        {/* Search & Sort Controls */}
+                        <div className="mb-4 space-y-2">
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    value={tagSearch}
+                                    onChange={(e) => setTagSearch(e.target.value)}
+                                    placeholder="Поиск тегов..."
+                                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400/50 focus:bg-slate-800/70 transition-all"
+                                />
+                                {tagSearch && (
+                                    <button
+                                        onClick={() => setTagSearch('')}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-all"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex rounded-xl bg-slate-800/40 border border-slate-700/50 p-0.5">
+                                <button
+                                    onClick={() => setTagSort('popularity')}
+                                    className={`flex-1 px-3 py-1.5 text-xs rounded-lg transition-all ${
+                                        tagSort === 'popularity'
+                                            ? 'bg-cyan-500/20 text-cyan-300 font-medium'
+                                            : 'text-slate-500 hover:text-slate-300'
+                                    }`}
+                                >
+                                    По популярности
+                                </button>
+                                <button
+                                    onClick={() => setTagSort('name')}
+                                    className={`flex-1 px-3 py-1.5 text-xs rounded-lg transition-all ${
+                                        tagSort === 'name'
+                                            ? 'bg-cyan-500/20 text-cyan-300 font-medium'
+                                            : 'text-slate-500 hover:text-slate-300'
+                                    }`}
+                                >
+                                    По названию
+                                </button>
+                            </div>
                         </div>
 
                         {/* Selected Tags Display */}
@@ -1668,10 +1723,18 @@ export default function TodoNotesApp() {
                             ) : (
                                 <div className="text-center py-8">
                                     <div className="p-3 bg-slate-800/30 rounded-xl inline-block mb-3">
-                                        <Hash size={24} className="text-slate-600" />
+                                        {tagSearch ? (
+                                            <Search size={24} className="text-slate-600" />
+                                        ) : (
+                                            <Hash size={24} className="text-slate-600" />
+                                        )}
                                     </div>
-                                    <p className="text-sm text-slate-500">Нет тегов</p>
-                                    <p className="text-xs text-slate-600 mt-1">Добавьте теги к заметкам</p>
+                                    <p className="text-sm text-slate-500">
+                                        {tagSearch ? 'Ничего не найдено' : 'Нет тегов'}
+                                    </p>
+                                    <p className="text-xs text-slate-600 mt-1">
+                                        {tagSearch ? 'Попробуйте другой запрос' : 'Добавьте теги к заметкам'}
+                                    </p>
                                 </div>
                             )}
                         </div>
