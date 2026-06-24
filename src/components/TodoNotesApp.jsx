@@ -669,6 +669,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                     multiple
                                     onChange={handleEditFilesChange}
                                     className="hidden"
+                                    style={{ display: 'none' }}
                                 />
                             </label>
                         </div>
@@ -1519,6 +1520,7 @@ export default function TodoNotesApp() {
                                         multiple
                                         onChange={handleNewFilesChange}
                                         className="hidden"
+                                        style={{ display: 'none' }}
                                     />
                                 </label>
                             </div>
