@@ -720,6 +720,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                             </div>
                         </div>
                         {(() => {
+                            if (!note.content) return null;
                             const isLong = note.content.split('\n').length > MAX_COLLAPSED_LINES;
                             return (
                                 <div className={`relative ${isLong && !expanded ? 'max-h-[220px] overflow-hidden' : ''}`}>
@@ -730,7 +731,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                 </div>
                             );
                         })()}
-                        {note.content.split('\n').length > MAX_COLLAPSED_LINES && (
+                        {note.content && note.content.split('\n').length > MAX_COLLAPSED_LINES && (
                             <button
                                 onClick={onToggleExpand}
                                 className="mt-2 flex items-center gap-1.5 text-sm text-cyan-400 hover:text-cyan-300 transition-colors font-medium"
@@ -1111,7 +1112,7 @@ export default function TodoNotesApp() {
     };
 
     const addNote = async () => {
-        if (newNoteContent.trim()) {
+        if (newNoteContent.trim() || newFiles.length) {
             const newNoteData = {
                 content: newNoteContent,
                 hashtags: currentHashtags
@@ -1522,7 +1523,7 @@ export default function TodoNotesApp() {
                                 </label>
                             </div>
 
-                            {newNoteContent.trim() && !editingId && (
+                            {(newNoteContent.trim() || newFiles.length) && !editingId && (
                                 <motion.button
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}

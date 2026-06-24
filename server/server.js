@@ -542,7 +542,9 @@ app.get('/api/notes/count', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/notes', authenticateToken, async (req, res) => {
-    const { content, type, hashtags } = req.body;
+    const content = req.body.content ?? '';
+    const type = req.body.type || 'text';
+    const hashtags = req.body.hashtags;
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
