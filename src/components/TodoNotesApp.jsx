@@ -669,7 +669,6 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                     multiple
                                     onChange={handleEditFilesChange}
                                     className="hidden"
-                                    style={{ display: 'none' }}
                                 />
                             </label>
                         </div>
@@ -1520,12 +1519,11 @@ export default function TodoNotesApp() {
                                         multiple
                                         onChange={handleNewFilesChange}
                                         className="hidden"
-                                        style={{ display: 'none' }}
                                     />
                                 </label>
                             </div>
 
-                            {(newNoteContent.trim() || newFiles.length) && !editingId && (
+                            {(newNoteContent.trim() !== '' || newFiles.length > 0) && !editingId && (
                                 <motion.button
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
