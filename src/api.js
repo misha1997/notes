@@ -127,6 +127,28 @@ export const noteService = {
     }
 };
 
+export const attachmentService = {
+    async getAll({ offset = 0, limit = 25 } = {}) {
+        const res = handleForbidden(
+            await fetch(`${api}/api/attachments?offset=${offset}&limit=${limit}`, { headers: getHeaders() })
+        );
+        if (!res.ok) return { attachments: [], hasMore: false };
+        const data = await res.json();
+        if (Array.isArray(data)) {
+            return { attachments: data, hasMore: false };
+        }
+        return data;
+    },
+
+    async getCount() {
+        const res = handleForbidden(
+            await fetch(`${api}/api/attachments/count`, { headers: getHeaders() })
+        );
+        if (!res.ok) return { total: 0 };
+        return res.json();
+    }
+};
+
 export const userService = {
     async getProfile() {
         const res = handleForbidden(await fetch(`${api}/api/user/profile`, { headers: getHeaders() }));
@@ -196,6 +218,12 @@ export const tagService = {
             body: JSON.stringify({ tag })
         }));
         if (!res.ok) return { click_count: 0 };
+        return res.json();
+    },
+
+    async getFileTags() {
+        const res = handleForbidden(await fetch(`${api}/api/tags/files`, { headers: getHeaders() }));
+        if (!res.ok) return [];
         return res.json();
     }
 };

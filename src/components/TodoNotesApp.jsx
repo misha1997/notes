@@ -1,40 +1,14 @@
 import React, { useState, useEffect, forwardRef, useRef, useCallback, useMemo, memo } from 'react';
-import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, LogOut, Copy, Paperclip, Download, Sparkles, Plus, Check, User, ChevronDown, ChevronUp, Search, TrendingUp, ArrowDownAZ } from 'lucide-react';
+import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, Copy, Paperclip, Download, Sparkles, Plus, Check, ChevronDown, ChevronUp, Search, TrendingUp, ArrowDownAZ } from 'lucide-react';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
-import { noteService, userService, tagService } from '../api';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
-
-// Цветовые схемы для хештегов (градиенты)
-const TAG_COLORS = [
-    'from-cyan-500/30 to-blue-500/30 border-cyan-400/40 text-cyan-300',
-    'from-purple-500/30 to-pink-500/30 border-purple-400/40 text-purple-300',
-    'from-emerald-500/30 to-teal-500/30 border-emerald-400/40 text-emerald-300',
-    'from-amber-500/30 to-orange-500/30 border-amber-400/40 text-amber-300',
-    'from-rose-500/30 to-red-500/30 border-rose-400/40 text-rose-300',
-    'from-violet-500/30 to-indigo-500/30 border-violet-400/40 text-violet-300',
-    'from-sky-500/30 to-cyan-500/30 border-sky-400/40 text-sky-300',
-    'from-fuchsia-500/30 to-purple-500/30 border-fuchsia-400/40 text-fuchsia-300',
-];
-
-// Функция получения цвета для тега (псевдо-случайное на основе имени)
-const getTagColor = (tag) => {
-    let hash = 0;
-    for (let i = 0; i < tag.length; i++) {
-        hash = tag.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
-};
+import { noteService, tagService } from '../api';
+import { useSearchParams } from 'react-router-dom';
+import AppHeader from './AppHeader';
+import { getAttachmentUrl, formatFileSize } from '../utils/attachments';
+import { getTagColor } from '../utils/tags';
 
 const urlRegex = /https?:\/\/[^\s]+/g;
-const apiBase = import.meta.env.VITE_API_URL || '';
-const apiOrigin = apiBase.replace(/\/api\/?$/, '');
 const EMPTY_ARRAY = [];
-
-const getAttachmentUrl = (att) => {
-    if (!apiOrigin) return att.url;
-    return `${apiOrigin}/download/${encodeURIComponent(att.filename)}`;
-};
 
 const splitTextWithLinks = (text) => {
     if (!text) return [{ type: 'text', value: '' }];
@@ -465,7 +439,8 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
         allTagNames,
         uploadProgress,
         expanded,
-        onToggleExpand
+        onToggleExpand,
+        highlighted
     },
     ref
 ) {
@@ -536,11 +511,12 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
             dragListener={false}
             dragControls={dragControls}
             ref={ref}
+            id={`note-${note.id}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-            className="group relative"
+            className={`group relative ${highlighted ? 'ring-2 ring-cyan-400/70 rounded-2xl' : ''}`}
         >
             <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             <div className="relative glass rounded-2xl p-5 border border-slate-700/50 hover:border-cyan-500/30 transition-all duration-300 card-hover">
@@ -808,13 +784,9 @@ export default function TodoNotesApp() {
     const loadMoreRef = useRef(null);
     const pageSize = 25;
 
-    const { logout, user } = useAuth();
-    const navigate = useNavigate();
-
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
-    };
+    const [searchParams] = useSearchParams();
+    const highlightNoteId = searchParams.get('note');
+    const [highlightedNotes, setHighlightedNotes] = useState(() => new Set());
 
     const toggleNoteExpand = useCallback((noteId) => {
         setExpandedNotes(prev => {
@@ -916,73 +888,6 @@ export default function TodoNotesApp() {
 
     // Account modal state
     const [expandedNotes, setExpandedNotes] = useState(new Set());
-    const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
-    const [accountEmail, setAccountEmail] = useState('');
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [accountLoading, setAccountLoading] = useState(false);
-    const [accountError, setAccountError] = useState('');
-    const [accountSuccess, setAccountSuccess] = useState('');
-
-    // Загрузка данных пользователя при открытии модалки
-    useEffect(() => {
-        if (isAccountModalOpen && user) {
-            setAccountEmail(user.email || '');
-            setCurrentPassword('');
-            setNewPassword('');
-            setConfirmPassword('');
-            setAccountError('');
-            setAccountSuccess('');
-        }
-    }, [isAccountModalOpen, user]);
-
-    const handleAccountSave = async () => {
-        setAccountError('');
-        setAccountSuccess('');
-
-        // Валидация паролей
-        if (newPassword || confirmPassword) {
-            if (!currentPassword) {
-                setAccountError('Введите текущий пароль для изменения пароля');
-                return;
-            }
-            if (newPassword !== confirmPassword) {
-                setAccountError('Новый пароль и подтверждение не совпадают');
-                return;
-            }
-            if (newPassword.length < 8) {
-                setAccountError('Пароль должен содержать минимум 8 символов');
-                return;
-            }
-            const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$/;
-            if (!passwordRegex.test(newPassword)) {
-                setAccountError('Пароль должен содержать минимум одну букву и одну цифру');
-                return;
-            }
-        }
-
-        setAccountLoading(true);
-        try {
-            await userService.updateProfile({
-                email: accountEmail,
-                currentPassword: currentPassword || undefined,
-                newPassword: newPassword || undefined
-            });
-            setAccountSuccess('Изменения сохранены');
-            setCurrentPassword('');
-            setNewPassword('');
-            setConfirmPassword('');
-            // Обновляем данные в контексте
-            if (user) {
-                user.email = accountEmail;
-            }
-        } catch (err) {
-            setAccountError(err.message || 'Ошибка при сохранении');
-        } finally {
-            setAccountLoading(false);
-        }
-    };
 
     const loadNotes = useCallback(async () => {
         setLoading(true);
@@ -1015,6 +920,25 @@ export default function TodoNotesApp() {
     useEffect(() => {
         loadNotes();
     }, [loadNotes]);
+
+    // Подсветка и скролл к заметке при переходе со страницы файлов (/dashboard?note=:id)
+    useEffect(() => {
+        if (!highlightNoteId || loading) return;
+        const el = document.getElementById(`note-${highlightNoteId}`);
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedNotes(new Set([String(highlightNoteId)]));
+        const t = setTimeout(() => setHighlightedNotes(new Set()), 2500);
+        return () => clearTimeout(t);
+    }, [highlightNoteId, loading, notes]);
+
+    // Если запрошенной заметки нет в загруженной странице (пагинация) — догружаем,
+    // пока не найдём или не исчерпаем список.
+    useEffect(() => {
+        if (!highlightNoteId || loading || loadingMore || !hasMore) return;
+        const found = notes.some(n => String(n.id) === String(highlightNoteId));
+        if (!found) loadMore();
+    }, [highlightNoteId, loading, loadingMore, hasMore, notes, loadMore]);
 
     useEffect(() => {
         const target = loadMoreRef.current;
@@ -1351,14 +1275,6 @@ export default function TodoNotesApp() {
         return dateFormatter.format(date);
     }, [dateFormatter]);
 
-    const formatFileSize = useCallback((bytes) => {
-        if (!bytes) return '0 B';
-        const units = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-        const value = bytes / Math.pow(1024, i);
-        return `${value.toFixed(value >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
-    }, []);
-
     const handleReorder = async (newOrder) => {
         setNotes(newOrder);
         try {
@@ -1392,34 +1308,13 @@ export default function TodoNotesApp() {
                         className="glass rounded-3xl p-6 sm:p-8 border border-slate-700/50 neon-shadow"
                     >
                         {/* Toolbar */}
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
-                            <div className="flex items-center gap-2">
-                                <div className="p-2 bg-cyan-500/10 rounded-xl">
-                                    <Sparkles className="text-cyan-400" size={20} />
-                                </div>
-                                <span className="text-slate-400 text-sm">
-                                    {newNoteContent.trim() || selectedFilterTags.length > 0
-                                        ? `${filteredNotes.length} из ${totalNotes} заметок`
-                                        : `${totalNotes} заметок`}
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setIsAccountModalOpen(true)}
-                                    className="p-2.5 rounded-xl bg-slate-800/50 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 border border-slate-700 hover:border-cyan-500/30 transition-all"
-                                    title="Аккаунт"
-                                >
-                                    <User size={18} />
-                                </button>
-                                <button
-                                    onClick={handleLogout}
-                                    className="p-2.5 rounded-xl bg-slate-800/50 text-slate-400 hover:text-red-400 hover:bg-red-500/10 border border-slate-700 hover:border-red-500/30 transition-all"
-                                    title="Выйти"
-                                >
-                                    <LogOut size={18} />
-                                </button>
-                            </div>
-                        </div>
+                        <AppHeader
+                            countText={
+                                newNoteContent.trim() || selectedFilterTags.length > 0
+                                    ? `${filteredNotes.length} из ${totalNotes} заметок`
+                                    : `${totalNotes} заметок`
+                            }
+                        />
 
                         {/* Create Note Form */}
                         <div
@@ -1570,6 +1465,7 @@ export default function TodoNotesApp() {
                                             uploadProgress={isEditing ? uploadProgress : null}
                                             expanded={expandedNotes.has(note.id)}
                                             onToggleExpand={() => toggleNoteExpand(note.id)}
+                                            highlighted={highlightedNotes.has(String(note.id))}
                                         />
                                     );
                                 })}
@@ -1745,144 +1641,7 @@ export default function TodoNotesApp() {
                 </motion.aside>
             </div>{/* Close flex container */}
 
-            {/* Account Modal */}
-            <AnimatePresence>
-                {isAccountModalOpen && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-                        onClick={() => setIsAccountModalOpen(false)}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                            className="glass rounded-2xl p-6 w-full max-w-md border border-slate-700/50 neon-shadow"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2.5 bg-cyan-500/10 rounded-xl">
-                                        <User className="text-cyan-400" size={24} />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-semibold text-slate-100">Аккаунт</h2>
-                                        <p className="text-sm text-slate-500">{user?.username}</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setIsAccountModalOpen(false)}
-                                    className="p-2 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded-xl transition-all"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-
-                            {accountError && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-sm"
-                                >
-                                    {accountError}
-                                </motion.div>
-                            )}
-
-                            {accountSuccess && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="mb-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-sm"
-                                >
-                                    {accountSuccess}
-                                </motion.div>
-                            )}
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm text-slate-400 mb-1.5">Email</label>
-                                    <input
-                                        type="email"
-                                        value={accountEmail}
-                                        onChange={(e) => setAccountEmail(e.target.value)}
-                                        className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all"
-                                        placeholder="your@email.com"
-                                    />
-                                </div>
-
-                                <div className="pt-4 border-t border-slate-700/50">
-                                    <p className="text-sm text-slate-400 mb-3">Изменить пароль (необязательно)</p>
-
-                                    <div className="space-y-3">
-                                        <div>
-                                            <input
-                                                type="password"
-                                                value={currentPassword}
-                                                onChange={(e) => setCurrentPassword(e.target.value)}
-                                                className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all"
-                                                placeholder="Текущий пароль"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <input
-                                                type="password"
-                                                value={newPassword}
-                                                onChange={(e) => setNewPassword(e.target.value)}
-                                                className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all"
-                                                placeholder="Новый пароль"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <input
-                                                type="password"
-                                                value={confirmPassword}
-                                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                                className="w-full px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-all"
-                                                placeholder="Подтвердите новый пароль"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3 mt-6">
-                                <button
-                                    onClick={() => setIsAccountModalOpen(false)}
-                                    className="flex-1 px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all"
-                                >
-                                    Отмена
-                                </button>
-                                <button
-                                    onClick={handleAccountSave}
-                                    disabled={accountLoading}
-                                    className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium hover:from-cyan-400 hover:to-blue-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    {accountLoading ? (
-                                        <>
-                                            <motion.div
-                                                animate={{ rotate: 360 }}
-                                                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                                            >
-                                                <Sparkles size={16} />
-                                            </motion.div>
-                                            Сохранение...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Save size={16} />
-                                            Сохранить
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {/* Account Modal — перенесён в AppHeader */}
         </div>
     );
 }

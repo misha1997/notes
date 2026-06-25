@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import TodoNotesApp from './components/TodoNotesApp';
+import FilesPage from './components/FilesPage';
 
 // Защищенный роут: если не залогинен — кидает на /login
 const PrivateRoute = ({ children }) => {
@@ -23,6 +24,14 @@ function App() {
                         element={
                             <PrivateRoute>
                                 <TodoNotesApp />
+                            </PrivateRoute>
+                        }
+                    />
+                    <Route
+                        path="/files"
+                        element={
+                            <PrivateRoute>
+                                <FilesPage />
                             </PrivateRoute>
                         }
                     />

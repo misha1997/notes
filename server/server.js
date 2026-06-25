@@ -37,10 +37,12 @@ app.use(helmet({
             defaultSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             scriptSrc: ["'self'"],
-            imgSrc: ["'self'", "data:", "blob:"],
+            imgSrc: ["'self'", "data:", "blob:", process.env.REACT_APP_API_URL || "http://localhost:3001"],
             connectSrc: ["'self'", process.env.REACT_APP_API_URL || "http://localhost:3001"],
         },
     },
+    // Разрешаем кросс-origin загрузку статики вложений (превью <img> с бэкенда на фронте)
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     hsts: {
         maxAge: 31536000,
         includeSubDomains: true,
@@ -83,7 +85,11 @@ app.get('/download/:filename', (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFilename}; filename="${filename.replace(/[^a-zA-Z0-9_.-]/g, '_')}"`);
     res.setHeader('Content-Type', 'application/octet-stream');
 
-    res.status(200).end();
+    // За nginx файл отдаётся через X-Accel-Redirect (тело ниже игнорируется).
+    // Без nginx (локальная dev) — отдаём файл напрямую с диска.
+    res.sendFile(path.join(__dirname, 'uploads', filename), (err) => {
+        if (err && !res.headersSent) res.status(404).end();
+    });
 });
 
 // Настройка хранения файлов
@@ -669,6 +675,94 @@ app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
     await pool.query('UPDATE notes SET deleted_at = NOW() WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [req.params.id, req.user.id]);
     await pool.query('UPDATE attachments SET deleted_at = NOW() WHERE note_id = ? AND deleted_at IS NULL', [req.params.id]);
     res.json({ message: 'Удалено' });
+});
+
+// Все вложения пользователя (со ссылкой на заметку-владельца) — для страницы файлов
+app.get('/api/attachments', authenticateToken, async (req, res) => {
+    try {
+        const limitValue = Number.parseInt(req.query.limit, 10);
+        const offsetValue = Number.parseInt(req.query.offset, 10);
+        const limit = Number.isFinite(limitValue) && limitValue > 0 ? Math.min(limitValue, 100) : 25;
+        const offset = Number.isFinite(offsetValue) && offsetValue >= 0 ? offsetValue : 0;
+        const limitPlus = limit + 1;
+
+        const [rows] = await pool.query(`
+      SELECT a.id, a.note_id, a.filename, a.original_name, a.mime_type, a.size, a.created_at,
+             n.content AS note_content, n.timestamp AS note_timestamp
+      FROM attachments a
+      JOIN notes n ON a.note_id = n.id
+      WHERE n.user_id = ? AND a.deleted_at IS NULL AND n.deleted_at IS NULL
+      ORDER BY a.created_at DESC
+      LIMIT ? OFFSET ?`, [req.user.id, limitPlus, offset]);
+
+        const hasMore = rows.length > limit;
+        const sliced = rows.slice(0, limit);
+        const proto = req.headers['x-forwarded-proto'] || req.protocol;
+
+        // Хештеги заметок-владельцев (одним запросом для всех note_id)
+        const noteIds = [...new Set(sliced.map(a => a.note_id))];
+        let hashtagsMap = {};
+        if (noteIds.length) {
+            const [tagRows] = await pool.query(
+                'SELECT note_id, tag FROM hashtags WHERE note_id IN (?)',
+                [noteIds]
+            );
+            hashtagsMap = tagRows.reduce((acc, row) => {
+                if (!acc[row.note_id]) acc[row.note_id] = [];
+                acc[row.note_id].push(row.tag);
+                return acc;
+            }, {});
+        }
+
+        const attachments = sliced.map(att => ({
+            id: att.id,
+            noteId: att.note_id,
+            filename: att.filename,
+            originalName: att.original_name,
+            mimeType: att.mime_type,
+            size: att.size,
+            createdAt: att.created_at,
+            noteContent: att.note_content,
+            noteTimestamp: att.note_timestamp,
+            hashtags: hashtagsMap[att.note_id] || [],
+            url: `${proto}://${req.get('host')}/download/${encodeURIComponent(att.filename)}`
+        }));
+
+        res.json({ attachments, hasMore });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Общее количество вложений пользователя
+app.get('/api/attachments/count', authenticateToken, async (req, res) => {
+    try {
+        const [result] = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM attachments a
+      JOIN notes n ON a.note_id = n.id
+      WHERE n.user_id = ? AND a.deleted_at IS NULL AND n.deleted_at IS NULL`, [req.user.id]);
+        res.json({ total: result[0].count });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Хештеги пользователя с количеством файлов (для фильтра на странице файлов)
+app.get('/api/tags/files', authenticateToken, async (req, res) => {
+    try {
+        const [rows] = await pool.query(`
+      SELECT h.tag, COUNT(DISTINCT a.id) as count
+      FROM hashtags h
+      JOIN notes n ON h.note_id = n.id
+      JOIN attachments a ON a.note_id = n.id
+      WHERE n.user_id = ? AND n.deleted_at IS NULL AND a.deleted_at IS NULL
+      GROUP BY h.tag
+      ORDER BY count DESC, h.tag ASC`, [req.user.id]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // API для получения всех хештегов пользователя с количеством заметок
