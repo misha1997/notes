@@ -1,25 +1,32 @@
 // Общие утилиты для вложений — используются на странице заметок и на странице файлов.
 
-// Базовый API-адрес для построения прямых ссылок на скачивание.
-// В сборке CRA import.meta.env.VITE_API_URL не задан → apiBase = '' → используется att.url, отданный бэкендом.
-const apiBase = (import.meta && import.meta.env && import.meta.env.VITE_API_URL) || '';
+// Берём базовый API-адрес из того же env, что и api.js — REACT_APP_API_URL.
+// В dev: http://localhost:3001 → строим абсолютные URL на бэкенд (фронт :3000, бэкенд :3001).
+// В prod (Docker/nginx): пустая строка → ОТНОСИТЕЛЬНЫЕ пути /download/.. и /uploads/..
+// Относительный путь наследует протокол и хост страницы, поэтому не возникает
+// mixed-content (http-картинка на https-странице) и CSP img-src 'self' пропускает её.
+// Раньше использовался import.meta.env.VITE_API_URL — это Vite-переменная, в CRA она
+// всегда undefined, и в прод URL строился через абсолютный att.url от бэкенда
+// (http://host/... даже за внешним https-прокси) — из-за этого превью не грузились.
+const apiBase = process.env.REACT_APP_API_URL ?? '';
 const apiOrigin = apiBase.replace(/\/api\/?$/, '');
 
-// Возвращает URL для скачивания файла. Если apiOrigin задан (сборка с явным API URL),
-// строит ссылку от него, иначе берёт абсолютный url из ответа бэкенда.
+// URL для скачивания файла (через /download — отдаёт attachment + X-Accel-Redirect).
 export const getAttachmentUrl = (att) => {
-    if (!apiOrigin) return att.url;
-    return `${apiOrigin}/download/${encodeURIComponent(att.filename)}`;
+    const filename = encodeURIComponent(att.filename);
+    if (!apiOrigin) return `/download/${filename}`;
+    return `${apiOrigin}/download/${filename}`;
 };
 
-// Возвращает URL для INLINE-просмотра (превью картинок в <img>).
-// /download отдаёт application/octet-stream + attachment и пустое тело без nginx —
+// URL для INLINE-просмотра (превью картинки в <img>, лайтбокс).
+// /download отдаёт application/octet-stream + Content-Disposition: attachment —
 // браузер такое в <img> не рендерит. Поэтому используем статический /uploads,
 // который express.static отдаёт с правильным Content-Type по расширению
-// (в dev напрямую, в prod через nginx location /uploads/).
+// (в dev напрямую с :3001, в prod через nginx location /uploads/ → бэкенд).
 export const getAttachmentFileUrl = (att) => {
-    if (!apiOrigin) return (att.url && att.url.replace('/download/', '/uploads/')) || att.url;
-    return `${apiOrigin}/uploads/${encodeURIComponent(att.filename)}`;
+    const filename = encodeURIComponent(att.filename);
+    if (!apiOrigin) return `/uploads/${filename}`;
+    return `${apiOrigin}/uploads/${filename}`;
 };
 
 // Человекочитаемый размер файла.
