@@ -424,6 +424,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
         setEditHashtagInput,
         startEdit,
         deleteNote,
+        setNoteToDelete,
         saveEdit,
         formatDate,
         setEditingId,
@@ -1452,6 +1453,7 @@ export default function TodoNotesApp() {
                                             setEditHashtagInput={setEditHashtagInput}
                                             startEdit={startEdit}
                                             deleteNote={deleteNote}
+                                            setNoteToDelete={setNoteToDelete}
                                             saveEdit={isEditing ? saveEdit : undefined}
                                             formatDate={formatDate}
                                             setEditingId={setEditingId}
