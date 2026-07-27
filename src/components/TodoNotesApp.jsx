@@ -690,7 +690,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                 <button onClick={() => startEdit(note)} className="p-2 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 rounded-lg transition-colors" title="Редактировать">
                                     <Edit2 size={18} />
                                 </button>
-                                <button onClick={() => deleteNote(note.id)} className="p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors" title="Удалить">
+                                <button onClick={() => setNoteToDelete(note)} className="p-2 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors" title="Удалить">
                                     <Trash2 size={18} />
                                 </button>
                             </div>
@@ -888,6 +888,9 @@ export default function TodoNotesApp() {
 
     // Account modal state
     const [expandedNotes, setExpandedNotes] = useState(new Set());
+
+    // Подтверждение удаления заметки
+    const [noteToDelete, setNoteToDelete] = useState(null);
 
     const loadNotes = useCallback(async () => {
         setLoading(true);
@@ -1642,6 +1645,58 @@ export default function TodoNotesApp() {
             </div>{/* Close flex container */}
 
             {/* Account Modal — перенесён в AppHeader */}
+
+            {/* Подтверждение удаления заметки */}
+            <AnimatePresence>
+                {noteToDelete && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                        onClick={() => setNoteToDelete(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                            transition={{ type: 'spring', duration: 0.25 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-sm rounded-2xl bg-slate-800 border border-slate-700 p-6 shadow-2xl"
+                        >
+                            <div className="flex items-start gap-3 mb-4">
+                                <div className="p-2.5 rounded-xl bg-red-500/20 text-red-400 shrink-0">
+                                    <Trash2 size={22} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-slate-100">Удалить заметку?</h3>
+                                    <p className="text-sm text-slate-400 mt-1">
+                                        Заметка будет удалена без возможности восстановления.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 justify-end">
+                                <button
+                                    onClick={() => setNoteToDelete(null)}
+                                    className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors"
+                                >
+                                    Отмена
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        const id = noteToDelete.id;
+                                        setNoteToDelete(null);
+                                        await deleteNote(id);
+                                    }}
+                                    className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors"
+                                >
+                                    Удалить
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
