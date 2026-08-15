@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, LogOut, X, Save, Sparkles, StickyNote, Files } from 'lucide-react';
@@ -99,14 +100,14 @@ export default function AppHeader({ countText }) {
 
     return (
         <>
-            {/* Toolbar */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2">
+            {/* Top Toolbar */}
+            <div className="flex flex-row items-center justify-between mb-4 sm:mb-6 gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="hidden sm:flex items-center gap-2">
                         {navItem('/dashboard', StickyNote, 'Заметки', location.pathname === '/dashboard')}
                         {navItem('/files', Files, 'Файлы', location.pathname === '/files')}
                     </div>
-                    <span className="text-slate-400 text-sm">{countText}</span>
+                    <span className="text-slate-400 text-sm font-medium">{countText}</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
@@ -126,14 +127,46 @@ export default function AppHeader({ countText }) {
                 </div>
             </div>
 
+            {/* Mobile Bottom Navigation - Using Portal to avoid transform issues from motion.div parent */}
+            {createPortal(
+                <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-slate-900/80 backdrop-blur-xl border-t border-slate-700/50 z-50">
+                    <div className="flex items-center justify-around p-2 mb-safe">
+                        <Link
+                            to="/dashboard"
+                            className={`flex flex-col items-center justify-center w-full py-2 rounded-xl transition-all ${
+                                location.pathname === '/dashboard'
+                                    ? 'text-cyan-400'
+                                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
+                            }`}
+                        >
+                            <StickyNote size={20} className="mb-1" />
+                            <span className="text-[10px] font-medium uppercase tracking-wider">Заметки</span>
+                        </Link>
+                        <Link
+                            to="/files"
+                            className={`flex flex-col items-center justify-center w-full py-2 rounded-xl transition-all ${
+                                location.pathname === '/files'
+                                    ? 'text-cyan-400'
+                                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
+                            }`}
+                        >
+                            <Files size={20} className="mb-1" />
+                            <span className="text-[10px] font-medium uppercase tracking-wider">Файлы</span>
+                        </Link>
+                    </div>
+                </div>,
+                document.body
+            )}
+
             {/* Account Modal */}
-            <AnimatePresence>
-                {isAccountModalOpen && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            {createPortal(
+                <AnimatePresence>
+                    {isAccountModalOpen && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
                         onClick={() => setIsAccountModalOpen(false)}
                     >
                         <motion.div
@@ -263,7 +296,9 @@ export default function AppHeader({ countText }) {
                         </motion.div>
                     </motion.div>
                 )}
-            </AnimatePresence>
+            </AnimatePresence>,
+            document.body
+        )}
         </>
     );
 }

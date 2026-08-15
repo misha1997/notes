@@ -27,6 +27,7 @@ export default function FilesPage() {
 
     // Лайтбокс для просмотра картинок на сайте
     const [lightboxId, setLightboxId] = useState(null);
+    const [isMobileTagsOpen, setIsMobileTagsOpen] = useState(false);
 
     // Теги файлов и фильтр (как в заметках)
     const [fileTags, setFileTags] = useState([]); // [{ tag, count }] — count по файлам
@@ -172,7 +173,7 @@ export default function FilesPage() {
     }, [lightboxId, lightboxIndex, imageFiles]);
 
     return (
-        <div className="min-h-screen p-4 sm:p-8">
+        <div className="min-h-screen p-3 sm:p-6 lg:p-8 pb-24 sm:pb-8">
             <div className="max-w-7xl mx-auto flex gap-6">
                 {/* Main Content */}
                 <div className="flex-1 min-w-0 order-1">
@@ -180,9 +181,26 @@ export default function FilesPage() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="glass rounded-3xl p-6 sm:p-8 border border-slate-700/50 neon-shadow"
+                        className="glass rounded-3xl p-4 sm:p-6 lg:p-8 border border-slate-700/50 neon-shadow"
                     >
                         <AppHeader countText={countText} />
+
+                        {/* Mobile Tags Filter Button */}
+                        <div className="lg:hidden mb-6 flex items-center justify-between">
+                            <h1 className="text-xl font-bold text-slate-100">Ваши файлы</h1>
+                            <button
+                                onClick={() => setIsMobileTagsOpen(true)}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/50 text-slate-300 border border-slate-700 hover:bg-cyan-500/10 hover:text-cyan-400 hover:border-cyan-500/30 transition-all"
+                            >
+                                <Hash size={18} />
+                                <span className="text-sm font-medium">Фильтр</span>
+                                {selectedFilterTags.length > 0 && (
+                                    <span className="ml-1 px-1.5 py-0.5 rounded-md bg-cyan-500 text-slate-900 text-xs font-bold">
+                                        {selectedFilterTags.length}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
 
                         {/* Поиск по имени файла */}
                         <div className="relative mb-6">
@@ -555,6 +573,136 @@ export default function FilesPage() {
                                     <Download size={15} />
                                     Скачать
                                 </a>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Mobile Tags Drawer */}
+            <AnimatePresence>
+                {isMobileTagsOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm lg:hidden flex justify-end"
+                        onClick={() => setIsMobileTagsOpen(false)}
+                    >
+                        <motion.div
+                            initial={{ x: '100%' }}
+                            animate={{ x: 0 }}
+                            exit={{ x: '100%' }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                            className="w-full max-w-sm h-full bg-slate-900 border-l border-slate-700 shadow-2xl flex flex-col p-4 sm:p-6"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-lg font-semibold text-slate-200 flex items-center gap-2">
+                                    <div className="p-1.5 bg-cyan-500/10 rounded-lg">
+                                        <Hash size={16} className="text-cyan-400" />
+                                    </div>
+                                    <span>Теги</span>
+                                    <span className="text-sm text-slate-500 font-normal">({fileTags.length})</span>
+                                </h2>
+                                <button
+                                    onClick={() => setIsMobileTagsOpen(false)}
+                                    className="p-2 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded-xl transition-all"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="mb-4 flex items-center gap-2">
+                                <div className="relative flex-1">
+                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                    <input
+                                        type="text"
+                                        value={tagSearch}
+                                        onChange={(e) => setTagSearch(e.target.value)}
+                                        placeholder="Поиск тегов..."
+                                        className="w-full pl-9 pr-8 py-2.5 text-sm rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400/50 focus:bg-slate-800/70 transition-all"
+                                    />
+                                    {tagSearch && (
+                                        <button
+                                            onClick={() => setTagSearch('')}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-all"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {selectedFilterTags.length > 0 && (
+                                <div className="mb-4 p-3 bg-cyan-500/5 rounded-xl border border-cyan-500/20">
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {selectedFilterTags.map(tag => (
+                                            <motion.span
+                                                key={tag}
+                                                initial={{ scale: 0.8, opacity: 0 }}
+                                                animate={{ scale: 1, opacity: 1 }}
+                                                className={`inline-flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r ${getTagColor(tag)} border rounded-lg text-xs`}
+                                            >
+                                                {tag}
+                                                <button
+                                                    onClick={() => toggleFilterTag(tag)}
+                                                    className="opacity-70 hover:opacity-100 hover:bg-white/10 rounded p-0.5 ml-0.5 transition-all"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </motion.span>
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center justify-between mt-3">
+                                        <p className="text-xs text-slate-500">
+                                            Найдено: <span className="text-cyan-400 font-medium">{filteredFiles.length}</span> из {totalFiles}
+                                        </p>
+                                        <button
+                                            onClick={clearFilterTags}
+                                            className="text-xs px-2 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-cyan-400 transition-all"
+                                        >
+                                            Сбросить
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex-1 overflow-y-auto scrollbar-styled -mx-2 px-2">
+                                {visibleFileTags.length > 0 ? (
+                                    <div className="space-y-2 pb-safe">
+                                        {visibleFileTags.map(({ tag, count }) => {
+                                            const isSelected = selectedFilterTags.includes(tag);
+                                            return (
+                                                <button
+                                                    key={tag}
+                                                    onClick={() => toggleFilterTag(tag)}
+                                                    className={`w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm transition-all duration-200 group border ${
+                                                        isSelected
+                                                            ? `bg-gradient-to-r ${getTagColor(tag)} shadow-lg shadow-cyan-500/10`
+                                                            : 'bg-slate-800/30 border-transparent text-slate-400 hover:bg-slate-800/60 hover:border-slate-600'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <Hash size={16} className={`shrink-0 ${isSelected ? 'opacity-100' : 'text-slate-500'}`} />
+                                                        <span className="truncate">{tag}</span>
+                                                    </div>
+                                                    <span className={`shrink-0 text-xs px-2.5 py-1 rounded-full ${
+                                                        isSelected
+                                                            ? 'bg-white/20'
+                                                            : 'bg-slate-700/50 text-slate-500'
+                                                    }`}>
+                                                        {count}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-8">
+                                        <p className="text-sm text-slate-500">Нет тегов</p>
+                                    </div>
+                                )}
                             </div>
                         </motion.div>
                     </motion.div>
