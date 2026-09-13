@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { WebSocketProvider } from './context/WebSocketContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import TodoNotesApp from './components/TodoNotesApp';
@@ -15,29 +16,31 @@ const PrivateRoute = ({ children }) => {
 function App() {
     return (
         <AuthProvider>
-            <BrowserRouter>
-                <Routes>
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route
-                        path="/dashboard"
-                        element={
-                            <PrivateRoute>
-                                <TodoNotesApp />
-                            </PrivateRoute>
-                        }
-                    />
-                    <Route
-                        path="/files"
-                        element={
-                            <PrivateRoute>
-                                <FilesPage />
-                            </PrivateRoute>
-                        }
-                    />
-                    <Route path="*" element={<Navigate to="/dashboard" />} />
-                </Routes>
-            </BrowserRouter>
+            <WebSocketProvider>
+                <BrowserRouter>
+                    <Routes>
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/register" element={<Register />} />
+                        <Route
+                            path="/dashboard"
+                            element={
+                                <PrivateRoute>
+                                    <TodoNotesApp />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route
+                            path="/files"
+                            element={
+                                <PrivateRoute>
+                                    <FilesPage />
+                                </PrivateRoute>
+                            }
+                        />
+                        <Route path="*" element={<Navigate to="/dashboard" />} />
+                    </Routes>
+                </BrowserRouter>
+            </WebSocketProvider>
         </AuthProvider>
     );
 }

@@ -2,13 +2,30 @@
 // При разработке (без REACT_APP_API_URL) используется localhost:3001.
 const api = process.env.REACT_APP_API_URL ?? 'http://localhost:3001';
 
+const getClientId = () => {
+    let id = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('notes_client_id') : null;
+    if (!id) {
+        id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : Math.random().toString(36).substring(2) + Date.now().toString(36);
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem('notes_client_id', id);
+        }
+    }
+    return id;
+};
+
+export const CLIENT_ID = getClientId();
+
 const getHeaders = () => ({
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${localStorage.getItem('token')}`
+    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'X-Client-Id': CLIENT_ID
 });
 
 const getAuthHeader = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`
+    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'X-Client-Id': CLIENT_ID
 });
 
 const handleForbidden = (res) => {
@@ -78,6 +95,7 @@ export const noteService = {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', `${api}/api/notes/${id}/attachments`);
             xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+            xhr.setRequestHeader('X-Client-Id', CLIENT_ID);
 
             if (onProgress) {
                 xhr.upload.onprogress = (e) => {

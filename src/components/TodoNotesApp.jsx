@@ -1,7 +1,8 @@
 import React, { useState, useEffect, forwardRef, useRef, useCallback, useMemo, memo } from 'react';
 import { Trash2, Edit2, Save, X, Code, FileText, Hash, GripVertical, Copy, Paperclip, Download, Sparkles, Plus, Check, ChevronDown, ChevronUp, Search, TrendingUp, ArrowDownAZ } from 'lucide-react';
 import { motion, Reorder, AnimatePresence, useDragControls } from 'framer-motion';
-import { noteService, tagService } from '../api';
+import { noteService, tagService, CLIENT_ID } from '../api';
+import { useWebSocket } from '../context/WebSocketContext';
 import { useSearchParams } from 'react-router-dom';
 import AppHeader from './AppHeader';
 import { getAttachmentUrl, formatFileSize } from '../utils/attachments';
@@ -897,8 +898,10 @@ export default function TodoNotesApp() {
     // Подтверждение удаления заметки
     const [noteToDelete, setNoteToDelete] = useState(null);
 
-    const loadNotes = useCallback(async () => {
-        setLoading(true);
+    const { subscribe } = useWebSocket();
+
+    const loadNotes = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         const [{ notes: data, hasMore: more }, { total }] = await Promise.all([
             noteService.getAll({ offset: 0, limit: pageSize }),
             noteService.getCount()
@@ -907,8 +910,85 @@ export default function TodoNotesApp() {
         setTotalNotes(total);
         setHasMore(more);
         setPage(1);
-        setLoading(false);
+        if (!silent) setLoading(false);
     }, [pageSize]);
+
+    useEffect(() => {
+        if (!subscribe) return;
+        const unsubscribe = subscribe((data) => {
+            if (data.type === 'RECONNECTED') {
+                loadNotes(true);
+                refreshHashtags();
+                return;
+            }
+
+            // Ignore messages echoed from this specific browser tab/client
+            if (data.senderId && data.senderId === CLIENT_ID) {
+                return;
+            }
+
+            switch (data.type) {
+                case 'NOTE_CREATED': {
+                    const newNote = data.note;
+                    if (!newNote) break;
+                    setNotes(prev => {
+                        const exists = prev.some(n => n.id === newNote.id);
+                        if (exists) {
+                            return prev.map(n => n.id === newNote.id ? { ...n, ...newNote } : n);
+                        }
+                        return [newNote, ...prev];
+                    });
+                    setTotalNotes(prev => prev + 1);
+                    refreshHashtags();
+                    break;
+                }
+                case 'NOTE_UPDATED': {
+                    const updatedNote = data.note;
+                    if (!updatedNote) break;
+                    setNotes(prev => prev.map(n => n.id === updatedNote.id ? { ...n, ...updatedNote } : n));
+                    refreshHashtags();
+                    break;
+                }
+                case 'NOTE_DELETED': {
+                    const id = Number(data.id);
+                    setNotes(prev => {
+                        const exists = prev.some(n => n.id === id);
+                        if (exists) {
+                            setTotalNotes(c => Math.max(0, c - 1));
+                        }
+                        return prev.filter(n => n.id !== id);
+                    });
+                    setEditingId(prev => prev === id ? null : prev);
+                    setNoteToDelete(prev => prev && prev.id === id ? null : prev);
+                    refreshHashtags();
+                    break;
+                }
+                case 'NOTES_REORDERED': {
+                    const noteIds = data.noteIds;
+                    if (!Array.isArray(noteIds)) break;
+                    setNotes(prev => {
+                        const map = new Map(prev.map(n => [n.id, n]));
+                        const reordered = [];
+                        for (const id of noteIds) {
+                            if (map.has(id)) {
+                                reordered.push(map.get(id));
+                                map.delete(id);
+                            }
+                        }
+                        for (const remaining of map.values()) {
+                            reordered.push(remaining);
+                        }
+                        return reordered;
+                    });
+                    break;
+                }
+                default:
+                    break;
+            }
+        });
+
+        return unsubscribe;
+    }, [subscribe, loadNotes, refreshHashtags]);
 
     const loadMore = useCallback(async () => {
         if (loading || loadingMore || !hasMore) return;

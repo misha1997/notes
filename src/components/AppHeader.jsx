@@ -5,11 +5,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { User, LogOut, X, Save, Sparkles, StickyNote, Files } from 'lucide-react';
 import { userService } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { useWebSocket } from '../context/WebSocketContext';
 
 // Общий хедер приложения: навигация (заметки/файлы), счётчик и кнопки аккаунт/выход.
 // Используется на страницах /dashboard и /files.
 export default function AppHeader({ countText }) {
     const { user, logout } = useAuth();
+    const { isConnected } = useWebSocket();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -107,7 +109,17 @@ export default function AppHeader({ countText }) {
                         {navItem('/dashboard', StickyNote, 'Заметки', location.pathname === '/dashboard')}
                         {navItem('/files', Files, 'Файлы', location.pathname === '/files')}
                     </div>
-                    <span className="text-slate-400 text-sm font-medium">{countText}</span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-slate-400 text-sm font-medium">{countText}</span>
+                        <span
+                            className={`w-2 h-2 rounded-full inline-block transition-colors ${
+                                isConnected
+                                    ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                                    : 'bg-amber-400/80 animate-pulse'
+                            }`}
+                            title={isConnected ? 'Синхронізація онлайн' : 'Підключення до синхронізації...'}
+                        />
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <button

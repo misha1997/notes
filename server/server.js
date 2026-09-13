@@ -1,4 +1,6 @@
+const http = require('http');
 const express = require('express');
+const { WebSocketServer, WebSocket } = require('ws');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
@@ -14,6 +16,7 @@ require('dotenv').config();
 const api = 'http://localhost:3001';
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
 const SALT_ROUNDS = 10;
@@ -38,7 +41,7 @@ app.use(helmet({
             styleSrc: ["'self'", "'unsafe-inline'"],
             scriptSrc: ["'self'"],
             imgSrc: ["'self'", "data:", "blob:", process.env.REACT_APP_API_URL || "http://localhost:3001"],
-            connectSrc: ["'self'", process.env.REACT_APP_API_URL || "http://localhost:3001"],
+            connectSrc: ["'self'", process.env.REACT_APP_API_URL || "http://localhost:3001", "ws:", "wss:"],
         },
     },
     // Разрешаем кросс-origin загрузку статики вложений (превью <img> с бэкенда на фронте)
@@ -236,6 +239,140 @@ function authenticateToken(req, res, next) {
         req.user = user;
         next();
     });
+}
+
+// --- WEBSOCKET REAL-TIME SYNC ---
+
+const wss = new WebSocketServer({ noServer: true });
+const userSockets = new Map(); // userId -> Set<WebSocket>
+
+function broadcastToUser(userId, payload) {
+    const sockets = userSockets.get(Number(userId));
+    if (!sockets || sockets.size === 0) return;
+    const message = JSON.stringify(payload);
+    for (const client of sockets) {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(message);
+        }
+    }
+}
+
+wss.on('connection', (ws, req, user) => {
+    const userId = Number(user.id);
+    if (!userSockets.has(userId)) {
+        userSockets.set(userId, new Set());
+    }
+    userSockets.get(userId).add(ws);
+
+    ws.isAlive = true;
+    ws.on('pong', () => {
+        ws.isAlive = true;
+    });
+
+    ws.on('close', () => {
+        const sockets = userSockets.get(userId);
+        if (sockets) {
+            sockets.delete(ws);
+            if (sockets.size === 0) {
+                userSockets.delete(userId);
+            }
+        }
+    });
+
+    ws.on('error', (err) => {
+        console.error(`WebSocket error for user ${userId}:`, err.message);
+    });
+
+    ws.send(JSON.stringify({ type: 'CONNECTED', userId }));
+});
+
+const heartbeatInterval = setInterval(() => {
+    for (const [userId, sockets] of userSockets.entries()) {
+        for (const ws of sockets) {
+            if (ws.isAlive === false) {
+                ws.terminate();
+                sockets.delete(ws);
+            } else {
+                ws.isAlive = false;
+                ws.ping();
+            }
+        }
+        if (sockets.size === 0) {
+            userSockets.delete(userId);
+        }
+    }
+}, 30000);
+
+wss.on('close', () => {
+    clearInterval(heartbeatInterval);
+});
+
+server.on('upgrade', (req, socket, head) => {
+    try {
+        const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        if (url.pathname !== '/ws') {
+            socket.destroy();
+            return;
+        }
+
+        const token = url.searchParams.get('token');
+        if (!token || token.split('.').length !== 3) {
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+
+        jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }, (err, user) => {
+            if (err) {
+                socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+                socket.destroy();
+                return;
+            }
+
+            wss.handleUpgrade(req, socket, head, (ws) => {
+                wss.emit('connection', ws, req, user);
+            });
+        });
+    } catch (err) {
+        socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+        socket.destroy();
+    }
+});
+
+async function getNoteById(noteId, userId, req) {
+    const [rows] = await pool.query(`
+        SELECT n.*, GROUP_CONCAT(h.tag) as hashtags 
+        FROM notes n 
+        LEFT JOIN hashtags h ON n.id = h.note_id 
+        WHERE n.id = ? AND n.user_id = ? AND n.deleted_at IS NULL
+        GROUP BY n.id
+    `, [noteId, userId]);
+
+    if (!rows.length) return null;
+    const note = rows[0];
+
+    const [attachmentRows] = await pool.query(`
+        SELECT a.* FROM attachments a
+        JOIN notes n ON a.note_id = n.id
+        WHERE a.note_id = ? AND n.user_id = ? AND a.deleted_at IS NULL AND n.deleted_at IS NULL
+    `, [noteId, userId]);
+
+    const proto = req.headers['x-forwarded-proto'] || req.protocol;
+    const attachments = attachmentRows.map(att => ({
+        id: att.id,
+        noteId: att.note_id,
+        filename: att.filename,
+        originalName: att.original_name,
+        mimeType: att.mime_type,
+        size: att.size,
+        url: `${proto}://${req.get('host')}/download/${encodeURIComponent(att.filename)}`
+    }));
+
+    return {
+        ...note,
+        hashtags: note.hashtags ? note.hashtags.split(',') : [],
+        attachments
+    };
 }
 
 // --- INPUT VALIDATION ---
@@ -562,7 +699,12 @@ app.post('/api/notes', authenticateToken, async (req, res) => {
             await conn.query('INSERT INTO hashtags (note_id, tag) VALUES ?', [values]);
         }
         await conn.commit();
-        res.status(201).json({ id: noteId, content, type, hashtags, attachments: [] });
+
+        const note = await getNoteById(noteId, req.user.id, req);
+        const senderId = req.headers['x-client-id'];
+        broadcastToUser(req.user.id, { type: 'NOTE_CREATED', note, senderId });
+
+        res.status(201).json(note || { id: noteId, content, type, hashtags, attachments: [] });
     } catch (err) {
         await conn.rollback();
         res.status(500).json({ error: err.message });
@@ -584,6 +726,10 @@ app.put('/api/notes/reorder', authenticateToken, async (req, res) => {
 
         await Promise.all(queries);
         await conn.commit();
+
+        const senderId = req.headers['x-client-id'];
+        broadcastToUser(req.user.id, { type: 'NOTES_REORDERED', noteIds: noteIds.map(Number), senderId });
+
         res.json({ message: 'Порядок обновлен' });
     } catch (err) {
         await conn.rollback();
@@ -606,7 +752,14 @@ app.put('/api/notes/:id', authenticateToken, async (req, res) => {
             await conn.query('INSERT INTO hashtags (note_id, tag) VALUES ?', [values]);
         }
         await conn.commit();
-        res.json({ message: 'Обновлено' });
+
+        const note = await getNoteById(req.params.id, req.user.id, req);
+        const senderId = req.headers['x-client-id'];
+        if (note) {
+            broadcastToUser(req.user.id, { type: 'NOTE_UPDATED', note, senderId });
+        }
+
+        res.json({ message: 'Обновлено', note });
     } catch (err) {
         await conn.rollback();
         res.status(500).json({ error: err.message });
@@ -651,6 +804,12 @@ app.post('/api/notes/:id/attachments', authenticateToken, upload.array('files'),
         });
     }
 
+    const note = await getNoteById(noteId, req.user.id, req);
+    const senderId = req.headers['x-client-id'];
+    if (note) {
+        broadcastToUser(req.user.id, { type: 'NOTE_UPDATED', note, senderId });
+    }
+
     res.status(201).json(attachments);
 });
 
@@ -668,12 +827,23 @@ app.delete('/api/notes/:noteId/attachments/:attachmentId', authenticateToken, as
     }
 
     await pool.query('UPDATE attachments SET deleted_at = NOW() WHERE id = ?', [attachmentId]);
+
+    const note = await getNoteById(noteId, req.user.id, req);
+    const senderId = req.headers['x-client-id'];
+    if (note) {
+        broadcastToUser(req.user.id, { type: 'NOTE_UPDATED', note, senderId });
+    }
+
     res.json({ message: 'Вложение удалено' });
 });
 
 app.delete('/api/notes/:id', authenticateToken, async (req, res) => {
     await pool.query('UPDATE notes SET deleted_at = NOW() WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [req.params.id, req.user.id]);
     await pool.query('UPDATE attachments SET deleted_at = NOW() WHERE note_id = ? AND deleted_at IS NULL', [req.params.id]);
+
+    const senderId = req.headers['x-client-id'];
+    broadcastToUser(req.user.id, { type: 'NOTE_DELETED', id: Number(req.params.id), senderId });
+
     res.json({ message: 'Удалено' });
 });
 
@@ -840,5 +1010,5 @@ app.use((req, res) => {
 });
 
 initDatabase().then(() => {
-    app.listen(PORT, () => console.log(`🚀 Server: http://localhost:${PORT}`));
+    server.listen(PORT, () => console.log(`🚀 Server: http://localhost:${PORT}`));
 });

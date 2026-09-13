@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Files, FileText, Image, Video, Music, Code, File, Download, Search, X, Paperclip, Hash, TrendingUp, ArrowDownAZ, StickyNote, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
-import { attachmentService, tagService } from '../api';
+import { attachmentService, tagService, CLIENT_ID } from '../api';
+import { useWebSocket } from '../context/WebSocketContext';
 import AppHeader from './AppHeader';
 import { getAttachmentUrl, getAttachmentFileUrl, formatFileSize, getFileIconName } from '../utils/attachments';
 import { getTagColor } from '../utils/tags';
@@ -81,9 +82,22 @@ export default function FilesPage() {
         setLoadingMore(false);
     }, [loading, loadingMore, hasMore, page, pageSize]);
 
+    const { subscribe } = useWebSocket();
+
     useEffect(() => {
         loadFiles();
     }, [loadFiles]);
+
+    useEffect(() => {
+        if (!subscribe) return;
+        const unsubscribe = subscribe((data) => {
+            if (data.senderId && data.senderId === CLIENT_ID) return;
+            if (['NOTE_CREATED', 'NOTE_UPDATED', 'NOTE_DELETED', 'RECONNECTED'].includes(data.type)) {
+                loadFiles();
+            }
+        });
+        return unsubscribe;
+    }, [subscribe, loadFiles]);
 
     useEffect(() => {
         const target = loadMoreRef.current;
