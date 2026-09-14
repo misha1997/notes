@@ -29,9 +29,14 @@ const getAuthHeader = () => ({
 });
 
 const handleForbidden = (res) => {
-    if (res.status === 403) {
+    if (res.status === 401 || res.status === 403) {
+        try {
+            sessionStorage.setItem('auth_session_expired', '1');
+        } catch (e) {
+            // ignore
+        }
         localStorage.removeItem('token');
-        if (window.location.pathname !== '/login') {
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
             window.location.assign('/login');
         }
     }
@@ -106,9 +111,14 @@ export const noteService = {
             }
 
             xhr.onload = () => {
-                if (xhr.status === 403) {
+                if (xhr.status === 401 || xhr.status === 403) {
+                    try {
+                        sessionStorage.setItem('auth_session_expired', '1');
+                    } catch (e) {
+                        // ignore
+                    }
                     localStorage.removeItem('token');
-                    if (window.location.pathname !== '/login') {
+                    if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
                         window.location.assign('/login');
                     }
                     reject(new Error('Unauthorized'));

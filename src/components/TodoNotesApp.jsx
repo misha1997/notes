@@ -7,6 +7,18 @@ import { useSearchParams } from 'react-router-dom';
 import AppHeader from './AppHeader';
 import { getAttachmentUrl, formatFileSize } from '../utils/attachments';
 import { getTagColor } from '../utils/tags';
+import {
+    saveNewNoteDraft,
+    getNewNoteDraft,
+    clearNewNoteDraft,
+    saveEditDraft,
+    getEditDraft,
+    clearEditDraft,
+    getAllEditDrafts,
+    getActiveEditDraftId,
+    setActiveEditDraftId,
+    clearActiveEditDraftId
+} from '../utils/drafts';
 
 const urlRegex = /https?:\/\/[^\s]+/g;
 const EMPTY_ARRAY = [];
@@ -442,7 +454,11 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
         uploadProgress,
         expanded,
         onToggleExpand,
-        highlighted
+        highlighted,
+        hasDraft,
+        isEditDraftRestored,
+        revertEditToOriginal,
+        cancelEdit
     },
     ref
 ) {
@@ -559,6 +575,23 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                                 </motion.div>
                             )}
                         </AnimatePresence>
+                        {isEditDraftRestored && (
+                            <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+                                <span className="flex items-center gap-1.5 font-medium">
+                                    <Sparkles size={14} className="text-amber-400 shrink-0" />
+                                    Відновлено незбережену чернетку
+                                </span>
+                                {revertEditToOriginal && (
+                                    <button
+                                        type="button"
+                                        onClick={revertEditToOriginal}
+                                        className="text-slate-400 hover:text-amber-200 underline transition-colors shrink-0 ml-2"
+                                    >
+                                        Повернути оригінал
+                                    </button>
+                                )}
+                            </div>
+                        )}
                         <RichTextEditor content={editContent} onChange={setEditContent} />
 
                         <div className="space-y-2">
@@ -658,7 +691,7 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                             <button onClick={saveEdit} className="btn-gradient w-full sm:w-auto justify-center px-6 py-2.5 rounded-xl text-white text-sm font-medium flex items-center gap-2 transition-all">
                                 <Save size={16} /> Сохранить
                             </button>
-                            <button onClick={() => setEditingId(null)} className="w-full sm:w-auto justify-center px-6 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-700 transition-all">
+                            <button onClick={cancelEdit || (() => setEditingId(null))} className="w-full sm:w-auto justify-center px-6 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 border border-slate-700 transition-all">
                                 <X size={16} /> Отмена
                             </button>
                         </div>
@@ -666,11 +699,24 @@ const DraggableNote = memo(forwardRef(function DraggableNote(
                 ) : (
                     <div className="ml-0 sm:ml-8">
                         <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                                 <div className={`p-2 rounded-lg ${hasCode ? 'bg-cyan-500/10 text-cyan-400' : 'bg-blue-500/10 text-blue-400'}`}>
                                     {hasCode ? <Code size={16} /> : <FileText size={16} />}
                                 </div>
                                 <span className="text-xs text-slate-500 font-medium">{formattedDate}</span>
+                                {hasDraft && (
+                                    <span
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30 cursor-pointer hover:bg-amber-500/25 transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            startEdit(note);
+                                        }}
+                                        title="Є незбережена чернетка. Натисніть для редагування"
+                                    >
+                                        <Sparkles size={11} className="text-amber-400" />
+                                        Чернетка
+                                    </span>
+                                )}
                             </div>
                             <div className="relative flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
                                 <AnimatePresence>
@@ -806,10 +852,32 @@ export default function TodoNotesApp() {
     }, []);
 
     // Содержимое новой заметки
-    const [newNoteContent, setNewNoteContent] = useState('');
+    const initialNewDraftRef = useRef(null);
+    if (initialNewDraftRef.current === null) {
+        initialNewDraftRef.current = getNewNoteDraft();
+    }
+    const initialNewDraft = initialNewDraftRef.current;
+
+    const [newNoteContent, setNewNoteContent] = useState(() => initialNewDraft?.content || '');
     const [hashtagInput, setHashtagInput] = useState('');
-    const [currentHashtags, setCurrentHashtags] = useState([]);
+    const [currentHashtags, setCurrentHashtags] = useState(() => initialNewDraft?.hashtags || []);
     const [newFiles, setNewFiles] = useState([]);
+    const [isNewDraftRestored, setIsNewDraftRestored] = useState(() => Boolean(initialNewDraft && (initialNewDraft.content?.trim() || initialNewDraft.hashtags?.length)));
+
+    // Автосохранение черновика новой заметки
+    useEffect(() => {
+        saveNewNoteDraft({
+            content: newNoteContent,
+            hashtags: currentHashtags
+        });
+    }, [newNoteContent, currentHashtags]);
+
+    const discardNewDraft = useCallback(() => {
+        setNewNoteContent('');
+        setCurrentHashtags([]);
+        clearNewNoteDraft();
+        setIsNewDraftRestored(false);
+    }, []);
 
     // Drag-and-drop для формы создания заметки
     const [isDraggingNew, setIsDraggingNew] = useState(false);
@@ -890,6 +958,24 @@ export default function TodoNotesApp() {
     const [editAttachments, setEditAttachments] = useState([]);
     const [newEditFiles, setNewEditFiles] = useState([]);
     const [attachmentsToRemove, setAttachmentsToRemove] = useState([]);
+    const [editOriginalContent, setEditOriginalContent] = useState('');
+    const [editOriginalHashtags, setEditOriginalHashtags] = useState([]);
+    const [isEditDraftRestored, setIsEditDraftRestored] = useState(false);
+    const [allDraftsMap, setAllDraftsMap] = useState(() => getAllEditDrafts());
+
+    const refreshDraftsMap = useCallback(() => {
+        setAllDraftsMap(getAllEditDrafts());
+    }, []);
+
+    // Автосохранение черновика редактирования
+    useEffect(() => {
+        if (!editingId) return;
+        saveEditDraft(editingId, {
+            content: editContent,
+            hashtags: editHashtags
+        });
+        refreshDraftsMap();
+    }, [editingId, editContent, editHashtags, refreshDraftsMap]);
 
     // Account modal state
     const [expandedNotes, setExpandedNotes] = useState(new Set());
@@ -1154,6 +1240,8 @@ export default function TodoNotesApp() {
                 setNewNoteContent('');
                 setCurrentHashtags([]);
                 setNewFiles([]);
+                setIsNewDraftRestored(false);
+                clearNewNoteDraft();
                 refreshHashtags();
             } catch (err) {
                 console.error("Ошибка при добавлении:", err);
@@ -1162,59 +1250,131 @@ export default function TodoNotesApp() {
     };
 
     const startEdit = useCallback((note) => {
+        const draft = getEditDraft(note.id);
+        const hasDraft = Boolean(
+            draft && (
+                draft.content !== note.content ||
+                JSON.stringify(draft.hashtags || []) !== JSON.stringify(note.hashtags || [])
+            )
+        );
+
         setEditingId(note.id);
-        setEditContent(note.content || '');
-        setEditHashtags(note.hashtags || []);
+        setActiveEditDraftId(note.id);
+        setEditOriginalContent(note.content || '');
+        setEditOriginalHashtags(note.hashtags || []);
+
+        if (hasDraft) {
+            setEditContent(draft.content || '');
+            setEditHashtags(draft.hashtags || []);
+            setIsEditDraftRestored(true);
+        } else {
+            setEditContent(note.content || '');
+            setEditHashtags(note.hashtags || []);
+            setIsEditDraftRestored(false);
+        }
+
         setEditHashtagInput('');
         setEditAttachments(note.attachments || []);
         setNewEditFiles([]);
         setAttachmentsToRemove([]);
     }, []);
 
+    const revertEditToOriginal = useCallback(() => {
+        setEditContent(editOriginalContent);
+        setEditHashtags(editOriginalHashtags);
+        if (editingId) {
+            clearEditDraft(editingId);
+            refreshDraftsMap();
+        }
+        setIsEditDraftRestored(false);
+    }, [editingId, editOriginalContent, editOriginalHashtags, refreshDraftsMap]);
+
+    const cancelEdit = useCallback(() => {
+        if (editingId) {
+            clearEditDraft(editingId);
+            clearActiveEditDraftId();
+            refreshDraftsMap();
+        }
+        setEditingId(null);
+        setEditContent('');
+        setEditHashtags([]);
+        setIsEditDraftRestored(false);
+        setNewEditFiles([]);
+        setAttachmentsToRemove([]);
+        setEditAttachments([]);
+    }, [editingId, refreshDraftsMap]);
+
     const saveEdit = async () => {
         const updatedData = {
             content: editContent,
             hashtags: editHashtags
         };
+        const currentEditingId = editingId;
 
-        await noteService.update(editingId, updatedData);
+        try {
+            await noteService.update(currentEditingId, updatedData);
 
-        let finalAttachments = [...editAttachments];
+            let finalAttachments = [...editAttachments];
 
-        if (attachmentsToRemove.length) {
-            for (const id of attachmentsToRemove) {
-                await noteService.deleteAttachment(editingId, id);
+            if (attachmentsToRemove.length) {
+                for (const id of attachmentsToRemove) {
+                    await noteService.deleteAttachment(currentEditingId, id);
+                }
+                finalAttachments = finalAttachments.filter(att => !attachmentsToRemove.includes(att.id));
             }
-            finalAttachments = finalAttachments.filter(att => !attachmentsToRemove.includes(att.id));
-        }
 
-        if (newEditFiles.length) {
-            setUploadProgress({ percent: 0, fileCount: newEditFiles.length });
-            const uploaded = await noteService.uploadAttachments(editingId, newEditFiles, (p) =>
-                setUploadProgress(prev => prev ? { ...prev, percent: p } : null)
-            );
-            setUploadProgress(null);
-            finalAttachments = [...finalAttachments, ...uploaded];
-        }
+            if (newEditFiles.length) {
+                setUploadProgress({ percent: 0, fileCount: newEditFiles.length });
+                const uploaded = await noteService.uploadAttachments(currentEditingId, newEditFiles, (p) =>
+                    setUploadProgress(prev => prev ? { ...prev, percent: p } : null)
+                );
+                setUploadProgress(null);
+                finalAttachments = [...finalAttachments, ...uploaded];
+            }
 
-        setNotes(notes.map(note =>
-            note.id === editingId
-                ? { ...note, ...updatedData, attachments: finalAttachments }
-                : note
-        ));
-        setEditingId(null);
-        setNewEditFiles([]);
-        setAttachmentsToRemove([]);
-        setEditAttachments([]);
-        refreshHashtags();
+            setNotes(notes.map(note =>
+                note.id === currentEditingId
+                    ? { ...note, ...updatedData, attachments: finalAttachments }
+                    : note
+            ));
+
+            clearEditDraft(currentEditingId);
+            clearActiveEditDraftId();
+            refreshDraftsMap();
+
+            setEditingId(null);
+            setIsEditDraftRestored(false);
+            setNewEditFiles([]);
+            setAttachmentsToRemove([]);
+            setEditAttachments([]);
+            refreshHashtags();
+        } catch (err) {
+            console.error("Ошибка при сохранении заметки:", err);
+        }
     };
 
     const deleteNote = useCallback(async (id) => {
         await noteService.delete(id);
+        clearEditDraft(id);
+        refreshDraftsMap();
         setNotes(prev => prev.filter(n => n.id !== id));
         setTotalNotes(prev => prev - 1);
         refreshHashtags();
-    }, [refreshHashtags]);
+    }, [refreshHashtags, refreshDraftsMap]);
+
+    // Авто-восстановление редактирования, если была активная чернетка при выходе/обновлении
+    const hasAutoRestoredActiveRef = useRef(false);
+    useEffect(() => {
+        if (loading || hasAutoRestoredActiveRef.current || !notes.length) return;
+        const activeDraftId = getActiveEditDraftId();
+        if (activeDraftId) {
+            const targetNote = notes.find(n => String(n.id) === String(activeDraftId));
+            if (targetNote) {
+                hasAutoRestoredActiveRef.current = true;
+                startEdit(targetNote);
+            }
+        }
+    }, [loading, notes, startEdit]);
 
     // Уникальные хештеги для сайдбара (с поиском и сортировкой)
     const uniqueHashtags = useMemo(() => {
@@ -1446,6 +1606,25 @@ export default function TodoNotesApp() {
                                     </motion.div>
                                 )}
                             </AnimatePresence>
+                            {isNewDraftRestored && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs"
+                                >
+                                    <span className="flex items-center gap-2 font-medium">
+                                        <Sparkles size={14} className="text-cyan-400 shrink-0" />
+                                        <span>Відновлено незбережену чернетку нової нотатки</span>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={discardNewDraft}
+                                        className="text-slate-400 hover:text-red-400 underline transition-colors shrink-0 ml-2"
+                                    >
+                                        Очистити чернетку
+                                    </button>
+                                </motion.div>
+                            )}
                             <RichTextEditor content={newNoteContent} onChange={setNewNoteContent} />
 
                             <div className="space-y-2">
@@ -1572,6 +1751,10 @@ export default function TodoNotesApp() {
                                             expanded={expandedNotes.has(note.id)}
                                             onToggleExpand={() => toggleNoteExpand(note.id)}
                                             highlighted={highlightedNotes.has(String(note.id))}
+                                            hasDraft={Boolean(allDraftsMap[String(note.id)])}
+                                            isEditDraftRestored={isEditing && isEditDraftRestored}
+                                            revertEditToOriginal={revertEditToOriginal}
+                                            cancelEdit={cancelEdit}
                                         />
                                     );
                                 })}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, Mail, Lock, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { LogIn, Mail, Lock, AlertCircle, Loader2, Sparkles, Info, X } from 'lucide-react';
 import GoogleLogin from './GoogleLogin';
 import { motion } from 'framer-motion';
 
@@ -10,6 +10,18 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [sessionNotice, setSessionNotice] = useState(() => {
+        try {
+            const expired = sessionStorage.getItem('auth_session_expired');
+            if (expired) {
+                sessionStorage.removeItem('auth_session_expired');
+                return 'Час вашої сесії минув. Будь ласка, увійдіть знову — ваші чернетки збережено на цьому пристрої.';
+            }
+        } catch (e) {
+            // ignore
+        }
+        return '';
+    });
 
     const { login } = useAuth();
     const navigate = useNavigate();
@@ -67,6 +79,26 @@ export default function Login() {
                     transition={{ delay: 0.1 }}
                     className="glass rounded-3xl p-6 sm:p-8 border border-slate-700/50 neon-shadow"
                 >
+                    {sessionNotice && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-3 text-amber-200 text-sm"
+                        >
+                            <Info size={20} className="shrink-0 mt-0.5 text-amber-400" />
+                            <div className="flex-1">
+                                <span>{sessionNotice}</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSessionNotice('')}
+                                className="text-amber-400/80 hover:text-amber-200"
+                            >
+                                <X size={16} />
+                            </button>
+                        </motion.div>
+                    )}
+
                     {error && (
                         <motion.div
                             initial={{ opacity: 0, y: -10 }}
