@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Files, FileText, Image, Video, Music, Code, File, Download, Search, X, Paperclip, Hash, TrendingUp, ArrowDownAZ, StickyNote, ChevronLeft, ChevronRight, ZoomIn } from 'lucide-react';
+import { Files, FileText, Image, Video, Music, Code, File, Download, Search, X, Paperclip, Hash, TrendingUp, ArrowDownAZ, StickyNote, ChevronLeft, ChevronRight, ZoomIn, Trash2 } from 'lucide-react';
 import { attachmentService, tagService, CLIENT_ID } from '../api';
 import { useWebSocket } from '../context/WebSocketContext';
 import AppHeader from './AppHeader';
@@ -29,6 +29,10 @@ export default function FilesPage() {
     // Лайтбокс для просмотра картинок на сайте
     const [lightboxId, setLightboxId] = useState(null);
     const [isMobileTagsOpen, setIsMobileTagsOpen] = useState(false);
+
+    // Удаление файла
+    const [fileToDelete, setFileToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Теги файлов и фильтр (как в заметках)
     const [fileTags, setFileTags] = useState([]); // [{ tag, count }] — count по файлам
@@ -174,9 +178,30 @@ export default function FilesPage() {
         setLightboxId(imageFiles[next].id);
     };
 
+    const handleDeleteConfirm = async () => {
+        if (!fileToDelete || isDeleting) return;
+        setIsDeleting(true);
+        const targetId = fileToDelete.id;
+        try {
+            await attachmentService.delete(targetId);
+            setFiles(prev => prev.filter(f => f.id !== targetId));
+            setTotalFiles(prev => Math.max(0, prev - 1));
+            if (lightboxId === targetId) {
+                setLightboxId(null);
+            }
+            setFileToDelete(null);
+            refreshFileTags();
+        } catch (err) {
+            console.error('Failed to delete attachment:', err);
+            alert(err.message || 'Ошибка при удалении файла');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     // Клавиатура: Esc — закрыть, ←/→ — навигация
     useEffect(() => {
-        if (lightboxId === null) return;
+        if (lightboxId === null || fileToDelete) return;
         const onKey = (e) => {
             if (e.key === 'Escape') closeLightbox();
             else if (e.key === 'ArrowLeft') showPrev();
@@ -184,7 +209,19 @@ export default function FilesPage() {
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [lightboxId, lightboxIndex, imageFiles]);
+    }, [lightboxId, lightboxIndex, imageFiles, fileToDelete]);
+
+    // Закрытие диалога подтверждения удаления по Esc
+    useEffect(() => {
+        if (!fileToDelete) return;
+        const onKey = (e) => {
+            if (e.key === 'Escape' && !isDeleting) {
+                setFileToDelete(null);
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [fileToDelete, isDeleting]);
 
     return (
         <div className="min-h-screen p-3 sm:p-6 lg:p-8 pb-24 sm:pb-8">
@@ -280,16 +317,29 @@ export default function FilesPage() {
                                                     </Link>
                                                 )}
 
-                                                {/* Иконка скачивания — справа вверху */}
-                                                <a
-                                                    href={fileUrl}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    title="Скачать"
-                                                    className="absolute top-2 right-2 z-10 p-2 rounded-lg bg-slate-900/70 border border-slate-700/60 text-slate-300 hover:text-cyan-300 hover:bg-cyan-500/15 hover:border-cyan-500/40 backdrop-blur-sm transition-all"
-                                                >
-                                                    <Download size={16} />
-                                                </a>
+                                                {/* Действия — справа вверху */}
+                                                <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+                                                    <a
+                                                        href={fileUrl}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        title="Скачать"
+                                                        className="p-2 rounded-lg bg-slate-900/70 border border-slate-700/60 text-slate-300 hover:text-cyan-300 hover:bg-cyan-500/15 hover:border-cyan-500/40 backdrop-blur-sm transition-all"
+                                                    >
+                                                        <Download size={16} />
+                                                    </a>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setFileToDelete(file);
+                                                        }}
+                                                        title="Удалить файл"
+                                                        className="p-2 rounded-lg bg-slate-900/70 border border-slate-700/60 text-slate-300 hover:text-red-400 hover:bg-red-500/15 hover:border-red-500/40 backdrop-blur-sm transition-all"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
 
                                                 {/* Обложка: превью для картинок, крупная иконка — для остальных */}
                                                 {isImage ? (
@@ -587,6 +637,14 @@ export default function FilesPage() {
                                     <Download size={15} />
                                     Скачать
                                 </a>
+                                <button
+                                    type="button"
+                                    onClick={() => setFileToDelete(lightboxFile)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/70 border border-slate-700/60 text-slate-300 hover:text-red-400 hover:bg-red-500/15 transition-all"
+                                >
+                                    <Trash2 size={15} />
+                                    Удалить
+                                </button>
                             </div>
                         </motion.div>
                     </motion.div>
@@ -717,6 +775,65 @@ export default function FilesPage() {
                                         <p className="text-sm text-slate-500">Нет тегов</p>
                                     </div>
                                 )}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Delete Confirmation Modal */}
+            <AnimatePresence>
+                {fileToDelete && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                        onClick={() => !isDeleting && setFileToDelete(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                            transition={{ type: 'spring', duration: 0.25 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-sm rounded-2xl bg-slate-800 border border-slate-700 p-6 shadow-2xl"
+                        >
+                            <div className="flex items-start gap-3 mb-4">
+                                <div className="p-2.5 rounded-xl bg-red-500/20 text-red-400 shrink-0">
+                                    <Trash2 size={22} />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="text-lg font-semibold text-slate-100">Удалить файл?</h3>
+                                    <p className="text-sm text-slate-400 mt-1 break-words">
+                                        Файл <span className="text-slate-200 font-medium">«{fileToDelete.originalName || fileToDelete.filename}»</span> будет удален без возможности восстановления.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-3 justify-end">
+                                <button
+                                    type="button"
+                                    disabled={isDeleting}
+                                    onClick={() => setFileToDelete(null)}
+                                    className="px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50"
+                                >
+                                    Отмена
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isDeleting}
+                                    onClick={handleDeleteConfirm}
+                                    className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {isDeleting ? (
+                                        <>
+                                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span>Удаление...</span>
+                                        </>
+                                    ) : (
+                                        'Удалить'
+                                    )}
+                                </button>
                             </div>
                         </motion.div>
                     </motion.div>

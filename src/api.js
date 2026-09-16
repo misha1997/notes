@@ -174,6 +174,18 @@ export const attachmentService = {
         );
         if (!res.ok) return { total: 0 };
         return res.json();
+    },
+
+    async delete(id) {
+        const res = handleForbidden(await fetch(`${api}/api/attachments/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+        }));
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || 'Ошибка при удалении файла');
+        }
+        return res.json();
     }
 };
 

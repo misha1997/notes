@@ -918,6 +918,35 @@ app.get('/api/attachments/count', authenticateToken, async (req, res) => {
     }
 });
 
+// Удаление вложения по его ID (со страницы файлов)
+app.delete('/api/attachments/:id', authenticateToken, async (req, res) => {
+    try {
+        const attachmentId = req.params.id;
+        const [rows] = await pool.query(`
+      SELECT a.* FROM attachments a
+      JOIN notes n ON a.note_id = n.id
+      WHERE a.id = ? AND n.user_id = ? AND a.deleted_at IS NULL AND n.deleted_at IS NULL
+    `, [attachmentId, req.user.id]);
+
+        const attachment = rows[0];
+        if (!attachment) {
+            return res.status(404).json({ error: 'Файл не найден' });
+        }
+
+        await pool.query('UPDATE attachments SET deleted_at = NOW() WHERE id = ?', [attachmentId]);
+
+        const note = await getNoteById(attachment.note_id, req.user.id, req);
+        const senderId = req.headers['x-client-id'];
+        if (note) {
+            broadcastToUser(req.user.id, { type: 'NOTE_UPDATED', note, senderId });
+        }
+
+        res.json({ message: 'Вложение удалено' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Хештеги пользователя с количеством файлов (для фильтра на странице файлов)
 app.get('/api/tags/files', authenticateToken, async (req, res) => {
     try {
