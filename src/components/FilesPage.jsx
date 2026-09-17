@@ -144,13 +144,15 @@ export default function FilesPage() {
     }, [fileTags, tagClickCounts, tagSearch, tagSort]);
 
     const search = searchText.trim().toLowerCase().replace(/^#/, '');
-    const filteredFiles = files.filter((f) => {
-        const name = (f.originalName || f.filename || '').toLowerCase();
-        const tags = (f.hashtags || []).map(t => t.toLowerCase().replace(/^#/, ''));
-        const matchesSearch = !search || name.includes(search) || tags.some(t => t.includes(search));
-        const matchesTags = selectedFilterTags.length === 0 || selectedFilterTags.every(t => (f.hashtags || []).includes(t));
-        return matchesSearch && matchesTags;
-    });
+    const filteredFiles = useMemo(() => {
+        return files.filter((f) => {
+            const name = (f.originalName || f.filename || '').toLowerCase();
+            const tags = (f.hashtags || []).map(t => t.toLowerCase().replace(/^#/, ''));
+            const matchesSearch = !search || name.includes(search) || tags.some(t => t.includes(search));
+            const matchesTags = selectedFilterTags.length === 0 || selectedFilterTags.every(t => (f.hashtags || []).includes(t));
+            return matchesSearch && matchesTags;
+        });
+    }, [files, search, selectedFilterTags]);
 
     const isFiltering = search || selectedFilterTags.length > 0;
     const countText = isFiltering
@@ -353,6 +355,7 @@ export default function FilesPage() {
                                                             src={previewUrl}
                                                             alt={file.originalName || file.filename}
                                                             loading="lazy"
+                                                            decoding="async"
                                                             className="w-full h-44 object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                                                         />
                                                         <span className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-slate-900/70 border border-slate-700/60 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -620,6 +623,7 @@ export default function FilesPage() {
                             <img
                                 src={getAttachmentFileUrl(lightboxFile)}
                                 alt={lightboxFile.originalName || lightboxFile.filename}
+                                decoding="async"
                                 className="max-w-[92vw] max-h-[78vh] object-contain rounded-xl shadow-2xl"
                             />
                             <div className="mt-3 flex items-center gap-3 text-sm text-slate-300">

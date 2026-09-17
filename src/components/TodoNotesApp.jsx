@@ -1317,9 +1317,7 @@ export default function TodoNotesApp() {
             let finalAttachments = [...editAttachments];
 
             if (attachmentsToRemove.length) {
-                for (const id of attachmentsToRemove) {
-                    await noteService.deleteAttachment(currentEditingId, id);
-                }
+                await Promise.all(attachmentsToRemove.map(id => noteService.deleteAttachment(currentEditingId, id)));
                 finalAttachments = finalAttachments.filter(att => !attachmentsToRemove.includes(att.id));
             }
 

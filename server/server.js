@@ -11,6 +11,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
+const compression = require('compression');
 require('dotenv').config();
 
 const api = 'http://localhost:3001';
@@ -32,6 +33,9 @@ if (JWT_SECRET.length < 32) {
     console.error('ERROR: JWT_SECRET should be at least 32 characters long');
     process.exit(1);
 }
+
+// Compression middleware for high throughput and reduced payload size
+app.use(compression());
 
 // Security middleware
 app.use(helmet({
@@ -74,12 +78,12 @@ app.use(cors({
 }));
 
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '500mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 // Apply rate limiting
 app.use('/api/auth/', authLimiter);
 app.use('/api/', apiLimiter);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { maxAge: '7d', immutable: true }));
 app.get('/download/:filename', (req, res) => {
     const filename = path.basename(req.params.filename);
     const encodedFilename = encodeURIComponent(filename);
@@ -87,6 +91,7 @@ app.get('/download/:filename', (req, res) => {
     res.setHeader('X-Accel-Redirect', `/protected-uploads/${encodedFilename}`);
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodedFilename}; filename="${filename.replace(/[^a-zA-Z0-9_.-]/g, '_')}"`);
     res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
 
     // За nginx файл отдаётся через X-Accel-Redirect (тело ниже игнорируется).
     // Без nginx (локальная dev) — отдаём файл напрямую с диска.
@@ -120,7 +125,9 @@ const pool = mysql.createPool({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     waitForConnections: true,
-    connectionLimit: 10
+    connectionLimit: 10,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000
 });
 
 // Инициализация БД
@@ -208,6 +215,27 @@ async function initDatabase() {
         UNIQUE KEY unique_user_tag (user_id, tag)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+        // Индексы для оптимизации выборок и сортировок
+        const [notesIdx] = await connection.query(`SHOW INDEX FROM notes WHERE Key_name = 'idx_notes_user_deleted_pos_time'`);
+        if (notesIdx.length === 0) {
+            await connection.query(`ALTER TABLE notes ADD INDEX idx_notes_user_deleted_pos_time (user_id, deleted_at, position, timestamp)`);
+        }
+
+        const [attNoteDelIdx] = await connection.query(`SHOW INDEX FROM attachments WHERE Key_name = 'idx_attachments_note_del'`);
+        if (attNoteDelIdx.length === 0) {
+            await connection.query(`ALTER TABLE attachments ADD INDEX idx_attachments_note_del (note_id, deleted_at)`);
+        }
+
+        const [attDelCreatedIdx] = await connection.query(`SHOW INDEX FROM attachments WHERE Key_name = 'idx_attachments_del_created'`);
+        if (attDelCreatedIdx.length === 0) {
+            await connection.query(`ALTER TABLE attachments ADD INDEX idx_attachments_del_created (deleted_at, created_at)`);
+        }
+
+        const [hashTagNoteIdx] = await connection.query(`SHOW INDEX FROM hashtags WHERE Key_name = 'idx_hashtags_tag_note'`);
+        if (hashTagNoteIdx.length === 0) {
+            await connection.query(`ALTER TABLE hashtags ADD INDEX idx_hashtags_tag_note (tag, note_id)`);
+        }
 
         connection.release();
         console.log('✅ База данных готова');
@@ -715,16 +743,28 @@ app.post('/api/notes', authenticateToken, async (req, res) => {
 
 app.put('/api/notes/reorder', authenticateToken, async (req, res) => {
     const { noteIds } = req.body;
+    if (!Array.isArray(noteIds) || noteIds.length === 0) {
+        return res.json({ message: 'Порядок обновлен' });
+    }
+
     const conn = await pool.getConnection();
     try {
         await conn.beginTransaction();
 
-        // Обновляем позицию для каждой заметки
-        const queries = noteIds.map((id, index) =>
-            conn.query('UPDATE notes SET position = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL', [index, id, req.user.id])
+        // Обновляем позицию для всех заметок одним пакетным запросом
+        const cases = noteIds.map(() => 'WHEN id = ? THEN ?').join(' ');
+        const caseParams = [];
+        noteIds.forEach((id, index) => {
+            caseParams.push(id, index);
+        });
+
+        await conn.query(
+            `UPDATE notes 
+             SET position = CASE ${cases} ELSE position END 
+             WHERE id IN (?) AND user_id = ? AND deleted_at IS NULL`,
+            [...caseParams, noteIds, req.user.id]
         );
 
-        await Promise.all(queries);
         await conn.commit();
 
         const senderId = req.headers['x-client-id'];
@@ -783,26 +823,31 @@ app.post('/api/notes/:id/attachments', authenticateToken, upload.array('files'),
     }
 
     const proto = req.headers['x-forwarded-proto'] || req.protocol;
-    const attachments = [];
+    const insertValues = [];
+    const filesMeta = [];
 
     for (const file of req.files) {
         const { filename, originalname, mimetype, size } = file;
         const decodedOriginalName = Buffer.from(originalname, 'latin1').toString('utf8');
-        const [result] = await pool.query(
-            'INSERT INTO attachments (note_id, filename, original_name, mime_type, size) VALUES (?, ?, ?, ?, ?)',
-            [noteId, filename, decodedOriginalName, mimetype, size]
-        );
-
-        attachments.push({
-            id: result.insertId,
-            noteId: Number(noteId),
-            filename,
-            originalName: decodedOriginalName,
-            mimeType: mimetype,
-            size,
-            url: `${proto}://${req.get('host')}/download/${encodeURIComponent(filename)}`
-        });
+        insertValues.push([noteId, filename, decodedOriginalName, mimetype, size]);
+        filesMeta.push({ filename, originalName: decodedOriginalName, mimeType: mimetype, size });
     }
+
+    const [result] = await pool.query(
+        'INSERT INTO attachments (note_id, filename, original_name, mime_type, size) VALUES ?',
+        [insertValues]
+    );
+
+    const firstId = result.insertId;
+    const attachments = filesMeta.map((meta, idx) => ({
+        id: firstId + idx,
+        noteId: Number(noteId),
+        filename: meta.filename,
+        originalName: meta.originalName,
+        mimeType: meta.mimeType,
+        size: meta.size,
+        url: `${proto}://${req.get('host')}/download/${encodeURIComponent(meta.filename)}`
+    }));
 
     const note = await getNoteById(noteId, req.user.id, req);
     const senderId = req.headers['x-client-id'];
