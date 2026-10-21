@@ -1084,5 +1084,5 @@ app.use((req, res) => {
 });
 
 initDatabase().then(() => {
-    server.listen(PORT, () => console.log(`🚀 Server: http://localhost:${PORT}`));
+    server.listen(PORT, '127.0.0.1', () => console.log(`🚀 Server: http://localhost:${PORT}`));
 });
